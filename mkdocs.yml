@@ -9,3 +9,6 @@ markdown_extensions:
     - mdx_math
 nav:
     - Home: index.md
+    - Transformers: transformers.md
+    - Masking: masking.md
+    - API Docs: /api_docs/
