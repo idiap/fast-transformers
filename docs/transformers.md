@@ -16,6 +16,38 @@ We also provide [recurrent transformer encoders](recurrent_transformers.md)
 which are meant to be given each input one at a time for autoregressive
 inference.
 
+Forward method
+--------------
+
+Both the transformer encoder and the transformer encoder layer accept the same
+parameters for the `forward()` method.
+
+```
+forward(x, attn_mask=None, length_mask=None)
+```
+
+**Arguments**
+
+* **x**: The input features of shape (N, L, E) where N is the batch size,
+  L is the sequence length (padded) and E is `d_model` passed in the
+  constructor.
+* **attn_mask**: An implementation of
+  [fast_transformers.masking.BaseMask](masking.md) that encodes where each
+  element of x can attend to.
+* **length_mask**: An implementation of
+  [fast_transformers.masking.BaseMask](masking.md) that encodes how many
+  elements each sequence in the batch consists of.
+
+If the masks are not provided they are automatically created as an all ones
+mask for the attention mask and the size of the tensor for the length mask.
+
+<div class="admonition note">
+    <p class="admonition-title">Note</p>
+    <p>Unlike the PyTorch transformer the dimensions of the input are ordered
+       with the <b>batch size first and the sequence second</b>.</p>
+</div>
+
+
 TransformerEncoder
 ------------------
 

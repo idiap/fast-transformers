@@ -6,7 +6,8 @@
 
 """Implement the full attention similar to the one implemented by PyTorch's
 MultiHeadAttention module. Note that this module is to be used in conjuction
-with the AttentionLayer in order to work."""
+with the `fast_transformers.attention.attention_layer.AttentionLayer` in order
+to work."""
 
 from math import sqrt
 
@@ -15,7 +16,7 @@ from torch.nn import Dropout, Module
 
 
 class FullAttention(Module):
-    """Implement the full softmax attention.
+    """Implement the scaled dot product attention with softmax.
 
     Arguments
     ---------
@@ -31,6 +32,20 @@ class FullAttention(Module):
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
+        """Implements the multihead softmax attention.
+
+        Arguments
+        ---------
+            queries: (N, L, H, E) The tensor containing the queries
+            keys: (N, S, H, E) The tensor containing the keys
+            values: (N, S, H, D) The tensor containing the values
+            attn_mask: An implementation of BaseMask that encodes where each
+                       query can attend to
+            query_lengths: An implementation of  BaseMask that encodes how
+                           many queries each sequence in the batch consists of
+            key_lengths: An implementation of BaseMask that encodes how
+                         many queries each sequence in the batch consists of
+        """
         # Extract some shapes and compute the temperature
         N, L, H, E = queries.shape
         _, S, _, D = values.shape

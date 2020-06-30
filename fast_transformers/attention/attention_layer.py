@@ -69,14 +69,12 @@ class AttentionLayer(Module):
             queries: (N, L, D) The tensor containing the queries
             keys: (N, S, D) The tensor containing the keys
             values: (N, S, D) The tensor containing the values
-            attn_mask: An implementation of fast_transformers.masking.BaseMask
-                       that encodes where each query can attend to.
-            query_lengths: An implementation of 
-                           fast_transformers.masking.BaseMask that encodes how
-                           many queries each sequence in the batch consists of.
-            key_lengths: An implementation of
-                         fast_transformers.masking.BaseMask that encodes how
-                         many queries each sequence in the batch consists of.
+            attn_mask: An implementation of BaseMask that encodes where each
+                       query can attend to
+            query_lengths: An implementation of  BaseMask that encodes how
+                           many queries each sequence in the batch consists of
+            key_lengths: An implementation of BaseMask that encodes how
+                         many queries each sequence in the batch consists of
 
         Returns
         -------

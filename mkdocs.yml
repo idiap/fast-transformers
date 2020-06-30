@@ -7,8 +7,10 @@ extra_css:
     - css/extra.css
 markdown_extensions:
     - mdx_math
+    - tables
 nav:
     - Home: index.md
     - Transformers: transformers.md
     - Masking: masking.md
+    - Attention: attention.md
     - API Docs: /api_docs/
