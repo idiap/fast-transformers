@@ -1,0 +1,11 @@
+site_name: Fast Transformers for PyTorch
+repo_url: https://github.com/idiap/fast-transformers
+theme: readthedocs
+extra_javascript: 
+    - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML
+extra_css:
+    - css/extra.css
+markdown_extensions:
+    - mdx_math
+nav:
+    - Home: index.md
