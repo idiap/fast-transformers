@@ -53,7 +53,7 @@ The fast transformers library has the following dependencies:
 
 For most machines installation should be as simple as:
 
-```
+```bash
 pip install --user fast_transformers
 ```
 
