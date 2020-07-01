@@ -127,7 +127,7 @@ By others
 ~~~~~~~~~
 
 * Efficient Attention: Attention with Linear Complexities (`1812.01243
-  <https://arxiv.org/abs/1812.01243>_`)
+  <https://arxiv.org/abs/1812.01243>`_)
 * Linformer: Self-Attention with Linear Complexity (`2006.04768
   <https://arxiv.org/abs/2006.04768>`_)
 * Reformer: The Efficient Transformer (`2001.04451
