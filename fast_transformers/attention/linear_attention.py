@@ -67,4 +67,4 @@ class LinearAttention(Module):
         # Finally compute and return the new values
         V = torch.einsum("nlhd,nhmd,nlh->nlhm", Q, KV, Z)
 
-        return V
+        return V.contiguous()
