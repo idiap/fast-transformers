@@ -64,6 +64,7 @@ class BaseMask(object):
 
     @property
     def shape(self):
+        """Return the shape of the boolean mask."""
         return self.bool_matrix.shape
 
     @property
@@ -77,6 +78,7 @@ class BaseMask(object):
 
     @property
     def all_ones(self):
+        """Return true if the mask is all ones."""
         if not hasattr(self, "_all_ones"):
             with torch.no_grad():
                 self._all_ones = torch.all(self.bool_matrix)
@@ -84,6 +86,7 @@ class BaseMask(object):
 
     @property
     def lower_triangular(self):
+        """Return true if the attention is a triangular causal mask."""
         if not hasattr(self, "_lower_triangular"):
             self._lower_triangular = False
             with torch.no_grad():
