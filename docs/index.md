@@ -3,8 +3,7 @@ Fast Transformers
 
 Transformers are very succsessfull models that achieve state of the art
 performance in many natural language tasks. However, it is very difficult to
-scale them to long sequences due to the quadratic scaling of the
-self-attention.
+scale them to long sequences due to the quadratic scaling of self-attention.
 
 This library was developed for our research on fast attention for transformers.
 You can find a list of our papers [below](#research) as well as related papers
@@ -54,7 +53,7 @@ The fast transformers library has the following dependencies:
 For most machines installation should be as simple as:
 
 ```bash
-pip install --user fast_transformers
+pip install --user pytorch-fast-transformers
 ```
 
 Research
