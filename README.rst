@@ -6,8 +6,9 @@ performance in many natural language tasks. However, it is very difficult to
 scale them to long sequences due to the quadratic scaling of self-attention.
 
 This library was developed for our research on fast attention for transformers.
-You can find a list of our papers [in the docs][1] as well as related papers
-and papers that we have implemented.
+You can find a list of our papers `in the docs
+<https://fast-transformers.github.io>`_ as well as related papers and papers
+that we have implemented.
 
 Quick-start
 -----------
@@ -88,6 +89,7 @@ The fast transformers library has the following dependencies:
 For most machines installation should be as simple as:
 
 .. code:: bash
+
     pip install --user pytorch-fast-transformers
 
 Documentation
@@ -107,7 +109,7 @@ To read about the theory behind some attention implementations in this library
 we encourage you to follow our research.
 
 * Transformers are RNNs: Fast Autoregressive Transformers with
-  Linear Attention (`arxiv <https://arxiv.org/abs/2006.16236>`_)
+  Linear Attention (`2006.16236 <https://arxiv.org/abs/2006.16236>`_)
 * Fast Transformers with Clustered Attention (preprint coming soon)
 
 If you found our research helpful or influential please consider citing
@@ -124,11 +126,11 @@ If you found our research helpful or influential please consider citing
 By others
 ~~~~~~~~~
 
-* Efficient Attention: Attention with Linear Complexities (`arxiv
-  <https://arxiv.org/abs/1812.01243>`_)
-* Linformer: Self-Attention with Linear Complexity (`arxiv
+* Efficient Attention: Attention with Linear Complexities (`1812.01243
+  <https://arxiv.org/abs/1812.01243>_`)
+* Linformer: Self-Attention with Linear Complexity (`2006.04768
   <https://arxiv.org/abs/2006.04768>`_)
-* Reformer: The Efficient Transformer (`arxiv
+* Reformer: The Efficient Transformer (`2001.04451
   <https://arxiv.org/abs/2001.04451>`_)
 
 Support, License and Copyright
@@ -137,8 +139,5 @@ Support, License and Copyright
 This software is distributed with the **MIT** license which pretty much means that
 you can use it however you want and for whatever reason you want. All the
 information regarding support, copyright and the license can be found in the
-[LICENSE](https://github.com/idiap/fast-transformers/blob/master/LICENSE) file
-in the repository.
-
-
-[1]: https://fast-transformers.github.io/
+`LICENSE <https://github.com/idiap/fast-transformers/blob/master/LICENSE>`_
+file in the repository.
