@@ -123,6 +123,13 @@ If you found our research helpful or influential please consider citing
         year = {2020}
     }
 
+    @article{vyas_et_al_2020,
+        author={Vyas, A. and Katharopoulos, A. and Fleuret, F.},
+        title={Fast Transformers with Clustered Attention},
+        journal={arXiv preprint arXiv:2007.04825},
+        year={2020}
+    }
+
 By others
 ~~~~~~~~~
 
