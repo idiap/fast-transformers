@@ -67,7 +67,9 @@ we encourage you to follow our research.
 * Transformers are RNNs: Fast Autoregressive Transformers with
   Linear Attention ([arxiv](https://arxiv.org/abs/2006.16236),
   [video](https://youtu.be/KBWh7XCUAi8))
-* Fast Transformers with Clustered Attention (preprint coming soon)
+* Fast Transformers with Clustered Attention
+  ([arxiv](https://arxiv.org/abs/2007.04825),
+  [blog](https://clustered-transformers.github.io/blog/))
 
 If you found our research helpful or influential please consider citing
 
