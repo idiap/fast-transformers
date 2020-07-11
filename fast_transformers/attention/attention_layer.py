@@ -18,7 +18,7 @@ from torch.nn import Linear, Module
 
 class AttentionLayer(Module):
     """Implement the attention layer. Namely project the inputs to multi-head
-    queries, keys and values, call the attention iplementation and then
+    queries, keys and values, call the attention implementation and then
     reproject the output.
 
     It can be thought of as a decorator (see decorator design patter) of an
