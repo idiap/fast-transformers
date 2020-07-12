@@ -55,8 +55,8 @@ class RecurrentLinearAttention(Module):
             raise ValueError("The batch size changed during iteration")
 
         # Update the internal state
-        Zi += K
-        Si += torch.einsum("nhd,nhm->nhdm", K, value)
+        Zi = Zi + K
+        Si = Si + torch.einsum("nhd,nhm->nhdm", K, value)
 
         # Compute the output
         Z = 1. / (torch.einsum("nhd,nhd->nh", Q, Zi) + self.eps)
