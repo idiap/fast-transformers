@@ -1,7 +1,7 @@
 Transformers
 ============
 
-The [fast\_transformers.transformers](api_docs/fast_transformers/transformers.html)
+The [fast\_transformers.transformers](/api_docs/fast_transformers/transformers.html)
 module provides the `TransformerEncoder` and `TransformerEncoderLayer` classes
 that implement a common transformer encoder similar to the PyTorch API.
 

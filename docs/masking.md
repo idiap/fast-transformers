@@ -80,4 +80,4 @@ is meant to be used for training autoregressive transformers.
 * **device**: The device to create the mask in (defaults to cpu)
 
 
-[1]: api_docs/fast_transformers/masking.html#fast_transformers.masking.BaseMask
+[1]: /api_docs/fast_transformers/masking.html#fast_transformers.masking.BaseMask
