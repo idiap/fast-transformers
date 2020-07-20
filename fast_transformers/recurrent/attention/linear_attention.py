@@ -55,8 +55,16 @@ class RecurrentLinearAttention(Module):
             raise ValueError("The batch size changed during iteration")
 
         # Update the internal state
-        Zi += K
-        Si += torch.einsum("nhd,nhm->nhdm", K, value)
+        #
+        # NOTE: The if clause is added due to GitHub PR #10. Simply using lines
+        # 61, 62 does not perform the operation in place which means it is
+        # slower for inference.
+        if K.grad_fn is not None or value.grad_fn is not None:
+            Zi = Zi + K
+            Si = Si + torch.einsum("nhd,nhm->nhdm", K, value)
+        else:
+            Zi += K
+            Si += torch.einsum("nhd,nhm->nhdm", K, value)
 
         # Compute the output
         Z = 1. / (torch.einsum("nhd,nhd->nh", Q, Zi) + self.eps)
