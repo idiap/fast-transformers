@@ -17,7 +17,8 @@ class RecurrentAttentionLayer(Module):
     """See fast_transformers.attention.attention_layer.AttentionLayer.
     
     The only difference with the corresponding module is that this projects
-    only one input and then calls the inner attention with the provided memory.
+    only one input and then calls the inner attention with the provided
+    previous state.
 
     Arguments
     ---------
@@ -60,7 +61,8 @@ class RecurrentAttentionLayer(Module):
             query: (N, D) The tensor containing the queries
             key: (N, D) The tensor containing the keys
             value: (N, D) The tensor containing the values
-            memory: The memory varies depending on the inner attention implementation
+            state: The state varies depending on the inner attention implementation
+            memory: **Deprecated** and replaced by state
 
         Returns
         -------
