@@ -12,7 +12,7 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
-from .._utils import check_state
+from ..._utils import check_state
 
 
 class RecurrentFullAttention(Module):

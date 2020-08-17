@@ -9,7 +9,7 @@
 import torch
 from torch.nn import Module
 
-from .._utils import check_state
+from ..._utils import check_state
 
 
 def elu_feature_map(x):

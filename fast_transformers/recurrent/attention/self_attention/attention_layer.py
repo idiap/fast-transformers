@@ -10,7 +10,7 @@ leaving the implementation of the attention to the inner attention module."""
 
 from torch.nn import Linear, Module
 
-from .._utils import check_state
+from ..._utils import check_state
 
 
 class RecurrentAttentionLayer(Module):

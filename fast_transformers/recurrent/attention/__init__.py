@@ -5,8 +5,8 @@
 #
 
 """Implementations of different types of autoregressive attention
-mechanisms."""
+mechanisms for self attention and cross attention."""
 
-from .attention_layer import RecurrentAttentionLayer
-from .full_attention import RecurrentFullAttention
-from .linear_attention import RecurrentLinearAttention
+from .self_attention.attention_layer import RecurrentAttentionLayer
+from .self_attention.full_attention import RecurrentFullAttention
+from .self_attention.linear_attention import RecurrentLinearAttention
