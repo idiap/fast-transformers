@@ -9,6 +9,8 @@
 import torch
 from torch.nn import Module
 
+from .._utils import check_state
+
 
 def elu_feature_map(x):
     return torch.nn.functional.elu(x) + 1
@@ -34,7 +36,10 @@ class RecurrentLinearAttention(Module):
         self.feature_map = feature_map or elu_feature_map
         self.eps = eps
 
-    def forward(self, query, key, value, memory=None):
+    def forward(self, query, key, value, state=None, memory=None):
+        # Normalize state/memory
+        state = check_state(state, memory)
+
         # Apply the feature map to the query and key
         Q = self.feature_map(query)
         K = self.feature_map(key)
@@ -44,11 +49,11 @@ class RecurrentLinearAttention(Module):
         _, _, M = value.shape
 
         # Extract the memory or initialize it
-        if memory is None:
+        if state is None:
             Si = query.new_zeros((N, H, D, M))
             Zi = query.new_zeros((N, H, D))
         else:
-            Si, Zi = memory
+            Si, Zi = state
 
         # Ensure the batch size did not change
         if len(Si) != N:
@@ -56,9 +61,9 @@ class RecurrentLinearAttention(Module):
 
         # Update the internal state
         #
-        # NOTE: The if clause is added due to GitHub PR #10. Simply using lines
-        # 61, 62 does not perform the operation in place which means it is
-        # slower for inference.
+        # NOTE: The if clause is added due to GitHub PR #10. Simply using the
+        # following two lines does not perform the operation in place which
+        # means it is slower for inference.
         if K.grad_fn is not None or value.grad_fn is not None:
             Zi = Zi + K
             Si = Si + torch.einsum("nhd,nhm->nhdm", K, value)

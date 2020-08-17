@@ -15,9 +15,13 @@ interface is subject to change given the implementation of other recurrent
 attentions.
 """
 
+import warnings
+
 import torch
 from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList
 import torch.nn.functional as F
+
+from ._utils import check_state
 
 
 class RecurrentTransformerEncoderLayer(Module):
@@ -51,7 +55,7 @@ class RecurrentTransformerEncoderLayer(Module):
         self.dropout = Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
 
-    def forward(self, x, memory=None):
+    def forward(self, x, state=None, memory=None):
         """Apply the transformer encoder to the input x using the provided
         memory.
 
@@ -59,10 +63,14 @@ class RecurrentTransformerEncoderLayer(Module):
         ---------
             x: The input features of shape (N, E) where N is the batch size and
                E is d_model passed in the constructor
-            memory: The memory can vary depending on the attention implementation
+            state: The state can vary depending on the attention implementation
+            memory: **Deprecated** name for the state argument
         """
+        # Normalize the state name
+        state = check_state(state, memory)
+
         # Run the self attention and add it to the input
-        x2, memory = self.attention(x, x, x, memory)
+        x2, state = self.attention(x, x, x, state)
         x = x + self.dropout(x2)
 
         # Run the fully connected part of the layer
@@ -70,7 +78,7 @@ class RecurrentTransformerEncoderLayer(Module):
         y = self.dropout(self.activation(self.linear1(y)))
         y = self.dropout(self.linear2(y))
 
-        return self.norm2(x+y), memory
+        return self.norm2(x+y), state
 
 
 class RecurrentTransformerEncoder(Module):
@@ -92,29 +100,31 @@ class RecurrentTransformerEncoder(Module):
         self.layers = ModuleList(layers)
         self.norm = norm_layer
 
-    def forward(self, x, memory=None):
+    def forward(self, x, state=None, memory=None):
         """Apply all recurrent transformer layers to the input x using the
-        provided memory.
+        provided state.
 
         Arguments
         ---------
             x: The input features of shape (N, E) where N is the batch size and
                E is d_model passed in the constructor of each recurrent
                transformer encoder layer
-            memory: A list of objects to be passed to each recurrent
-                    transformer encoder layer
+            state: A list of objects to be passed to each recurrent
+                   transformer encoder layer
+            memory: **Deprecated** name for the state argument
         """
         # Initialize the memory to None if not given
-        if memory is None:
-            memory = [None]*len(self.layers)
+        state = check_state(state, memory)
+        if state is None:
+            state = [None]*len(self.layers)
 
         # Apply all the transformers
         for i, layer in enumerate(self.layers):
-            x, m = layer(x, memory[i])
-            memory[i] = m
+            x, s = layer(x, state[i])
+            state[i] = s
 
         # Apply the normalization if needed
         if self.norm is not None:
             x = self.norm(x)
 
-        return x, memory
+        return x, state
