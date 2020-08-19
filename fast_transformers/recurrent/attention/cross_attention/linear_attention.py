@@ -28,11 +28,14 @@ class RecurrentCrossLinearAttention(Module):
              denominator (default: 1e-6)
     """
     def __init__(self, feature_map=None, eps=1e-6):
-        super(LinearAttention, self).__init__()
+        super(RecurrentCrossLinearAttention, self).__init__()
         self.feature_map = feature_map or elu_feature_map
         self.eps = eps
 
     def forward(self, query, keys, values, key_lengths, state=None):
+        # Compute the feature representation of the query
+        Q = self.feature_map(query)
+
         # If the state is not given compute the key-value matrix and the
         # normalizers, namely compute whatever is needed in order to attend to
         # keys and values with a given query.
