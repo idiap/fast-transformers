@@ -13,6 +13,8 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
+from ..attention_registry import AttentionRegistry, Optional, Int, Float
+
 
 class ExactTopKAttention(Module):
     """Implement the oracle top-k softmax attention.
@@ -63,3 +65,15 @@ class ExactTopKAttention(Module):
 
         # Make sure that what we return is contiguous
         return V.contiguous()
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "exact-topk", ExactTopKAttention,
+    [
+        ("topk", Optional(Int, 32)),
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

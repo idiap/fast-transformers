@@ -10,6 +10,7 @@ attention depending on the input sequence length."""
 import torch
 from torch.nn import Module
 
+from ..attention_registry import AttentionRegistry, Optional, Int, Float
 from .full_attention import FullAttention
 
 
@@ -44,3 +45,15 @@ class ConditionalFullAttention(Module):
         else:
             return self.full_attention(queries, keys, values, attn_mask,
                                        query_lengths, key_lengths)
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "conditional-full", ConditionalFullAttention,
+    [
+        ("length_limit", Optional(Int, 512)),
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

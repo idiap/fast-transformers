@@ -9,6 +9,8 @@
 import torch
 from torch.nn import Module
 
+from ..attention_registry import AttentionRegistry, Optional, Callable
+
 
 def elu_feature_map(x):
     return torch.nn.functional.elu(x) + 1
@@ -68,3 +70,11 @@ class LinearAttention(Module):
         V = torch.einsum("nlhd,nhmd,nlh->nlhm", Q, KV, Z)
 
         return V.contiguous()
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "linear", LinearAttention,
+    [("feature_map", Optional(Callable))]
+)
