@@ -58,3 +58,7 @@ from .attention_builders import \
     AttentionBuilder, \
     RecurrentAttentionBuilder, \
     RecurrentCrossAttentionBuilder
+
+from .transformer_builders import \
+    TransformerEncoderBuilder, \
+    RecurrentEncoderBuilder

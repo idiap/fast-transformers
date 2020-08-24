@@ -12,6 +12,7 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
+from ....attention_registry import RecurrentAttentionRegistry, Optional, Float
 from ..._utils import check_state
 
 
@@ -57,3 +58,14 @@ class RecurrentFullAttention(Module):
 
         # Make sure that what we return is contiguous
         return V, [keys, values]
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+RecurrentAttentionRegistry.register(
+    "full", RecurrentFullAttention,
+    [
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

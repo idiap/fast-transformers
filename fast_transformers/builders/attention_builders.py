@@ -22,6 +22,14 @@ class BaseAttentionBuilder(BaseBuilder):
         """Return a list with the available attention implementations."""
         return self._registry.keys
 
+    def validate_attention_type(self, attention_type):
+        """Parse the attention type according to the rules used by `get()` and
+        check if the requested attention is constructible."""
+        return all(
+            all(t in self._registry for t in a.split(","))
+            for a in attention_type.split(":")
+        )
+
     def __setattr__(self, key, value):
         # Make sure we have normal behaviour for the class members _registry
         # and _parameters
@@ -30,8 +38,8 @@ class BaseAttentionBuilder(BaseBuilder):
 
         # Assign everything else in the parameters dictionary
         if not self._registry.contains_parameter(key):
-            raise ValueError(("{!r} is not a valid attention "
-                              "parameter name").format(key))
+            raise AttributeError(("{!r} is not a valid attention "
+                                  "parameter name").format(key))
         self._parameters[key] = self._registry.validate_parameter(key, value)
 
     def __getattr__(self, key):
