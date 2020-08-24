@@ -8,8 +8,11 @@
 import argparse
 import unittest
 
-from fast_transformers.builders import TransformerEncoderBuilder
-from fast_transformers.builders import RecurrentEncoderBuilder
+from fast_transformers.builders import \
+    TransformerEncoderBuilder, \
+    RecurrentEncoderBuilder, \
+    TransformerDecoderBuilder, \
+    RecurrentDecoderBuilder
 
 
 class TestTransformerEncoderBuilder(unittest.TestCase):
@@ -59,6 +62,36 @@ class TestTransformerEncoderBuilder(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             builder.attention_type = "whatever"
+
+    def test_decoder_build(self):
+        transformer = TransformerDecoderBuilder().get()
+        builder = TransformerDecoderBuilder()
+        builder.n_layers = 1
+        builder.n_heads = 4
+        builder.self_attention_type = "linear"
+        transformer = builder.get()
+
+        with self.assertRaises(ValueError):
+            builder = TransformerDecoderBuilder()
+            builder.self_attention_type = "whatever"
+        with self.assertRaises(ValueError):
+            builder = TransformerDecoderBuilder()
+            builder.cross_attention_type = "whatever"
+
+    def test_recurrent_decoder(self):
+        transformer = RecurrentDecoderBuilder().get()
+        builder = RecurrentDecoderBuilder()
+        builder.n_layers = 1
+        builder.n_heads = 4
+        builder.self_attention_type = "linear"
+        transformer = builder.get()
+
+        with self.assertRaises(ValueError):
+            builder = RecurrentDecoderBuilder()
+            builder.self_attention_type = "whatever"
+        with self.assertRaises(ValueError):
+            builder = RecurrentDecoderBuilder()
+            builder.cross_attention_type = "whatever"
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ speed up autoregressive decoding."""
 import torch
 from torch.nn import Module
 
+from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, \
+    Callable
+
 
 def elu_feature_map(x):
     return torch.nn.functional.elu(x) + 1
@@ -52,3 +55,11 @@ class RecurrentCrossLinearAttention(Module):
         V = torch.einsum("nhd,nhmd,nh->nhm", Q, S, QZ)
 
         return V.contiguous(), [S, Z]
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+RecurrentCrossAttentionRegistry.register(
+    "linear", RecurrentCrossLinearAttention,
+    [("feature_map", Optional(Callable))]
+)

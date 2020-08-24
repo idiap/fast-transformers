@@ -14,6 +14,8 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
+from ..attention_registry import AttentionRegistry, Optional, Float
+
 
 class FullAttention(Module):
     """Implement the scaled dot product attention with softmax.
@@ -63,3 +65,14 @@ class FullAttention(Module):
 
         # Make sure that what we return is contiguous
         return V.contiguous()
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "full", FullAttention,
+    [
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

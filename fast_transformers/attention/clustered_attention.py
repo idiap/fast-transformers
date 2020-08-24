@@ -13,6 +13,7 @@ import torch.autograd
 from torch.nn import Dropout, Module
 from torch.nn.init import normal_
 
+from ..attention_registry import AttentionRegistry, Optional, Float, Int, Bool
 from ..masking import FullMask
 from ..aggregate import aggregate, broadcast
 from ..clustering.hamming import cluster
@@ -149,3 +150,18 @@ class ClusteredAttention(Module):
 
         # Broadcast grouped attention
         return self._broadcast_values(V, groups)
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "clustered", ClusteredAttention,
+    [
+        ("clusters", Int),
+        ("iterations", Optional(Int, 10)),
+        ("bits", Optional(Int, 32)),
+        ("hash_bias", Optional(Bool, True)),
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

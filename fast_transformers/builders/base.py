@@ -4,28 +4,18 @@
 # Apoorv Vyas <avyas@idiap.ch>
 #
 
-"""Define the interface that should be implemented by every builder.
+"""Provide a class for the others to inherit some useful functionality."""
 
-Concisely, the interface is simply a parameterless get() method that constructs
-the transformer and the ability to set the builder parameters via public
-properties.
-"""
 
-class BaseTransformerBuilder(object):
-    """The builder interface. Simply a get function with no parameters that
-    returns a torch.nn.Module."""
-    def get(self):
-        """Create and return the transformer."""
-        raise NotImplementedError()
-
+class BaseBuilder(object):
     @classmethod
     def from_kwargs(cls, **kwargs):
         """Construct a builder and set all the keyword arguments as parameters.
 
         The keyword argument strict is passed to
-        BaseTransformerBuilder.from_dictionary separately.
+        BaseBuilder.from_dictionary separately.
 
-        See BaseTransformerBuilder.from_dictionary().
+        See BaseBuilder.from_dictionary().
         """
         strict = kwargs.pop("strict", True)
         return cls.from_dictionary(kwargs, strict=strict)
@@ -36,7 +26,7 @@ class BaseTransformerBuilder(object):
 
         To be used for building transformers from command line arguments.
 
-        See BaseTransformerBuilder.from_dictionary().
+        See BaseBuilder.from_dictionary().
         """
         return cls.from_dictionary(vars(args), strict=strict)
 
@@ -66,11 +56,12 @@ class BaseTransformerBuilder(object):
         """
         builder = cls()
         for k, v in dictionary.items():
-            if not hasattr(builder, k):
+            try:
+                setattr(builder, k, v)
+            except AttributeError:
                 if strict:
-                    raise ValueError(("The transformer builder has no "
+                    raise ValueError(("The builder has no "
                                       "parameter {!r}").format(k))
                 else:
                     continue
-            setattr(builder, k, v)
         return builder

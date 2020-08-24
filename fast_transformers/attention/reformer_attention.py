@@ -13,6 +13,7 @@ import torch
 from torch.nn import Dropout, Module
 from torch.nn.init import normal_
 
+from ..attention_registry import AttentionRegistry, Optional, Int, Float, Bool
 from ..masking import FullMask
 
 
@@ -139,3 +140,18 @@ class ReformerAttention(Module):
                     factor * self._reformer_round(queries, K, values, mask, softmax_temp)
 
         return V_new
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "reformer", ReformerAttention,
+    [
+        ("chunk_size", Optional(Int, 32)),
+        ("bits", Optional(Int, 32)),
+        ("rounds", Optional(Int, 4)),
+        ("masked", Optional(Bool, False)),
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

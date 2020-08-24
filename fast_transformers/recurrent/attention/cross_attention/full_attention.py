@@ -11,6 +11,8 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
+from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, \
+    Float
 
 class RecurrentCrossFullAttention(Module):
     """Implement autoregressive softmax cross attention as a recurrent
@@ -47,3 +49,14 @@ class RecurrentCrossFullAttention(Module):
 
         # Make sure that we return a contiguous value
         return V.contiguous(), [keys, values]
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+RecurrentCrossAttentionRegistry.register(
+    "full", RecurrentCrossFullAttention,
+    [
+        ("softmax_temp", Optional(Float)),
+        ("dropout_rate", Optional(Float, 0.1))
+    ]
+)

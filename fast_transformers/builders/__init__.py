@@ -26,5 +26,41 @@ Example usage:
     transformer = builder.get()
 """
 
-from .transformer_encoder_builder import TransformerEncoderBuilder
-from .recurrent_encoder_builder import RecurrentEncoderBuilder
+__all__ = [
+    "AttentionBuilder",
+    "RecurrentAttentionBuilder",
+    "RecurrentCrossAttentionBuilder"
+]
+
+# Import the attention implementations so that they register themselves with
+# the builder. Attention implementations external to the library should be
+# imported before using the builders.
+#
+# TODO: Should this behaviour change? Namely, should all attention
+#       implementations be imported in order to be useable? This also allows
+#       using the library even partially built, for instance.
+from ..attention import \
+    FullAttention, \
+    LinearAttention, CausalLinearAttention, \
+    ClusteredAttention, ImprovedClusteredAttention, \
+    ReformerAttention, \
+    ExactTopKAttention, ImprovedClusteredCausalAttention, \
+    ConditionalFullAttention
+del FullAttention, \
+    LinearAttention, CausalLinearAttention, \
+    ClusteredAttention, ImprovedClusteredAttention, \
+    ReformerAttention, \
+    ExactTopKAttention, ImprovedClusteredCausalAttention, \
+    ConditionalFullAttention
+
+
+from .attention_builders import \
+    AttentionBuilder, \
+    RecurrentAttentionBuilder, \
+    RecurrentCrossAttentionBuilder
+
+from .transformer_builders import \
+    TransformerEncoderBuilder, \
+    RecurrentEncoderBuilder, \
+    TransformerDecoderBuilder, \
+    RecurrentDecoderBuilder

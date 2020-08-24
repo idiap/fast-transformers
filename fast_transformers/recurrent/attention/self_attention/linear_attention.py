@@ -9,6 +9,8 @@
 import torch
 from torch.nn import Module
 
+from ....attention_registry import RecurrentAttentionRegistry, Optional, \
+    Callable
 from ..._utils import check_state
 
 
@@ -76,3 +78,15 @@ class RecurrentLinearAttention(Module):
         V = torch.einsum("nhd,nhdm,nh->nhm", Q, Si, Z)
 
         return V, [Si, Zi]
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+RecurrentAttentionRegistry.register(
+    "linear", RecurrentLinearAttention,
+    [("feature_map", Optional(Callable))]
+)
+RecurrentAttentionRegistry.register(
+    "causal-linear", RecurrentLinearAttention,
+    [("feature_map", Optional(Callable))]
+)
