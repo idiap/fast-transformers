@@ -96,5 +96,6 @@ class TestTransformerEncoder(unittest.TestCase):
         y = transformer(x)
         self.assertEqual(y.shape, (12, 128, d_model))
 
+
 if __name__ == "__main__":
     unittest.main()

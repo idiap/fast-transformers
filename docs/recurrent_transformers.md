@@ -4,7 +4,7 @@ Recurrent Transformers
 The transformer layers implemented in the [fast_transformers.transformers][1]
 module are processing the entire sequence simultaneously. On the other hand,
 this module implements transfomers as recurrent networks. Namely as networks
-that process the sequence one element at a time while updating some memory.
+that process the sequence one element at a time while updating some state.
 
 Since this API is subject to change we will briefly go over the current
 differences in comparison to the normal transformers API.
@@ -17,7 +17,7 @@ The TransformerEncoder and TransformerEncoderLayer give way to
 the `forward()` method changes as follows:
 
 ```
-forward(x, memory=None)
+forward(x, state=None)
 ```
 
 **Arguments**
@@ -25,7 +25,7 @@ forward(x, memory=None)
 * **x**: The input features of shape (N, E) where N is the batch size and E is
   `d_model` passed in the constructor. Note that x corresponds to a specific
   element in the sequence and not the entire sequence.
-* **memory**: The memory is a python object that varies depending on the
+* **state**: The state is a python object that varies depending on the
   attention implementation
 
 Available Attentions
@@ -72,11 +72,11 @@ x0 = torch.rand(
     10,    # batch size
     12*32  # feature size
 )
-memory = None
+state = None
 
 x = x0
 for i in range(100):
-    x, memory = model(x, memory=memory)
+    x, state = model(x, state=state)
 ```
 
 

@@ -10,12 +10,15 @@ leaving the implementation of the attention to the inner attention module."""
 
 from torch.nn import Linear, Module
 
+from ..._utils import check_state
+
 
 class RecurrentAttentionLayer(Module):
     """See fast_transformers.attention.attention_layer.AttentionLayer.
     
     The only difference with the corresponding module is that this projects
-    only one input and then calls the inner attention with the provided memory.
+    only one input and then calls the inner attention with the provided
+    previous state.
 
     Arguments
     ---------
@@ -43,7 +46,7 @@ class RecurrentAttentionLayer(Module):
         self.out_projection = Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
 
-    def forward(self, query, key, value, memory=None):
+    def forward(self, query, key, value, state=None, memory=None):
         """Apply attention to the passed in query/key/value after projecting
         them to multiple heads.
 
@@ -58,12 +61,16 @@ class RecurrentAttentionLayer(Module):
             query: (N, D) The tensor containing the queries
             key: (N, D) The tensor containing the keys
             value: (N, D) The tensor containing the values
-            memory: The memory varies depending on the inner attention implementation
+            state: The state varies depending on the inner attention implementation
+            memory: **Deprecated** and replaced by state
 
         Returns
         -------
             The new value for each query as a tensor of shape (N, D).
         """
+        # Normalize the state/memory
+        state = check_state(state, memory)
+
         # Project the queries/keys/values
         query = self.query_projection(query)
         key = self.key_projection(key)
@@ -72,13 +79,13 @@ class RecurrentAttentionLayer(Module):
         # Reshape them into many heads and compute the attention
         N, D = query.shape
         H = self.n_heads
-        new_value, memory = self.inner_attention(
+        new_value, state = self.inner_attention(
             query.view(N, H, -1),
             key.view(N, H, -1),
             value.view(N, H, -1),
-            memory
+            state
         )
         new_value = new_value.view(N, -1)
 
         # Project the output and return
-        return self.out_projection(new_value), memory
+        return self.out_projection(new_value), state

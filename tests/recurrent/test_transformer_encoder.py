@@ -35,7 +35,7 @@ class TestRecurrentTransformerEncoder(unittest.TestCase):
         xs = []
         memory = None
         for i in range(7):
-            x, memory = transformer(torch.rand(10, d_model), memory=memory)
+            x, memory = transformer(torch.rand(10, d_model), state=memory)
             xs.append(x)
         for i in range(7):
             self.assertEqual(xs[i].shape, (10, d_model))
@@ -64,7 +64,7 @@ class TestRecurrentTransformerEncoder(unittest.TestCase):
         xs = []
         memory = None
         for i in range(7):
-            x, memory = transformer(torch.rand(10, d_model), memory=memory)
+            x, memory = transformer(torch.rand(10, d_model), state=memory)
             xs.append(x)
         for i in range(7):
             self.assertEqual(xs[i].shape, (10, d_model))
