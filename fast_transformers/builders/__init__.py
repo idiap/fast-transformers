@@ -61,4 +61,6 @@ from .attention_builders import \
 
 from .transformer_builders import \
     TransformerEncoderBuilder, \
-    RecurrentEncoderBuilder
+    RecurrentEncoderBuilder, \
+    TransformerDecoderBuilder, \
+    RecurrentDecoderBuilder
