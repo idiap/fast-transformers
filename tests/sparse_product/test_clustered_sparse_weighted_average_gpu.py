@@ -16,6 +16,7 @@ from fast_transformers.hashing import compute_hashes
 from fast_transformers.clustering.hamming import cluster
 from fast_transformers.sparse_product import clustered_sparse_weighted_average
 
+
 def cluster_queries(Q, query_lengths, C, I, B):
     N, H, L, E = Q.shape
     planes = Q.new_empty((B, E+1))
@@ -62,7 +63,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device)
         K = torch.randn(N, H, S, E).to(self.device)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
@@ -114,7 +115,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device)
         K = torch.randn(N, H, S, E).to(self.device)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
@@ -156,7 +157,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device)
         K = torch.randn(N, H, S, E).to(self.device)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
@@ -204,7 +205,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device)
         K = torch.randn(N, H, S, E).to(self.device)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)

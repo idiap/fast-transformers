@@ -63,7 +63,7 @@ class TestSparseProductBackward(unittest.TestCase):
         Q = torch.randn(N, H, L, E).to(self.device).requires_grad_(True)
         K = torch.randn(N, H, S, E).to(self.device).requires_grad_(True)
 
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
@@ -124,7 +124,7 @@ class TestSparseProductBackward(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device).requires_grad_(True)
         K = torch.randn(N, H, S, E).to(self.device).requires_grad_(True)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
@@ -184,7 +184,7 @@ class TestSparseProductBackward(unittest.TestCase):
 
         Q = torch.randn(N, H, L, E).to(self.device).requires_grad_(True)
         K = torch.randn(N, H, S, E).to(self.device).requires_grad_(True)
-        lengths = torch.full((N,), L).int().to(self.device)
+        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)

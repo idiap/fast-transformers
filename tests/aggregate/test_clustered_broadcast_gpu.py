@@ -53,7 +53,7 @@ class TestClusteredBroadcastGPU(unittest.TestCase):
         B = 16
 
         Q = torch.randn(N, H, L, E).cuda()
-        lengths = torch.full((N,), L).int().cuda()
+        lengths = torch.full((N,), L, dtype=torch.int32).cuda()
         lengths[1] = 400
         lengths[3] = 200
         lengths[7] = 450
@@ -97,7 +97,7 @@ class TestClusteredBroadcastGPU(unittest.TestCase):
         B = 32
 
         Q = torch.randn(N, H, L, E).cuda()
-        lengths = torch.full((N,), L).int().cuda()
+        lengths = torch.full((N,), L, dtype=torch.int32).cuda()
         groups, counts = cluster_queries(Q, lengths, C, I, B)
         Q_grouped = aggregate(Q, groups, 1/counts.float())
         K = torch.randn(N, H, S, E).cuda()

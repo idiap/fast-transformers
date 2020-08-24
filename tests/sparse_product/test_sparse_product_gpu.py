@@ -22,7 +22,7 @@ class TestSparseProductCUDA(unittest.TestCase):
     def test_single_query(self):
         X = torch.randn(1, 1, 1, 32).cuda()
         Y = torch.randn(1, 1, 100, 32).cuda()
-        lengths = torch.full((1,), 1).int().cuda()
+        lengths = torch.full((1,), 1, dtype=torch.int32).cuda()
         topk = (torch.cumsum(torch.rand(1, 1, 1, 10)*10, dim=-1)).long().cuda()
 
         products = sparse_dot_product(
@@ -43,7 +43,7 @@ class TestSparseProductCUDA(unittest.TestCase):
     def test_simple_product(self):
         X = torch.randn(10, 4, 100, 32).cuda()
         Y = torch.randn(10, 4, 100, 32).cuda()
-        lengths = torch.full((10,), 100).int().cuda()
+        lengths = torch.full((10,), 100, dtype=torch.int32).cuda()
         topk = (torch.cumsum(torch.rand(10, 4, 100, 10)*10, dim=-1)).long().cuda()
 
         A = torch.randn(10, 4, 100, 100).to(X.device).requires_grad_(False) 
