@@ -88,7 +88,6 @@ void clustered_sparse_dot_backward(
 
     float *queries = Q.data_ptr<float>();
     float *keys = K.data_ptr<float>();
-    auto topk_a = topk.accessor<int64_t, 4>();
     int64_t *topk_p = topk.data_ptr<int64_t>();
     int *groups_p = groups.data_ptr<int>();
     auto grad_out_a = grad_out.accessor<float, 4>();

@@ -14,9 +14,9 @@
  * The positive side of the plane gets a 1 the negative a 0.
  */
 void compute_hashes(torch::Tensor X, torch::Tensor A, torch::Tensor H) {
-    float *x = &X.packed_accessor<float, 2>()[0][0];
-    float *a = &A.packed_accessor<float, 2>()[0][0];
-    int64_t *h = &H.packed_accessor<int64_t, 1>()[0];
+    float *x = X.data_ptr<float>();
+    float *a = A.data_ptr<float>();
+    int64_t *h = H.data_ptr<int64_t>();
     int N = X.size(0);
     int B = A.size(0);
     int D = X.size(1);
@@ -45,8 +45,8 @@ void compute_hashes(torch::Tensor X, torch::Tensor A, torch::Tensor H) {
  * The positive side of the plane gets a 1 the negative a 0.
  */
 void compute_hashes_from_projections(torch::Tensor P, torch::Tensor H) {
-    float *p = &P.packed_accessor<float, 2>()[0][0];
-    int64_t *h = &H.packed_accessor<int64_t, 1>()[0];
+    float *p = P.data_ptr<float>();
+    int64_t *h = H.data_ptr<int64_t>();
     int N = P.size(0);
     int B = P.size(1);
     #pragma omp parallel for

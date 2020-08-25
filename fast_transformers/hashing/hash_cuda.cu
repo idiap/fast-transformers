@@ -9,8 +9,8 @@
 #include <torch/extension.h>
 #include <ATen/core/TensorAccessor.h>
 
-typedef torch::PackedTensorAccessor<int64_t, 1, torch::RestrictPtrTraits> int64_accessor;
-typedef torch::PackedTensorAccessor<float, 2, torch::RestrictPtrTraits> float_accessor;
+typedef torch::PackedTensorAccessor32<int64_t, 1, torch::RestrictPtrTraits> int64_accessor;
+typedef torch::PackedTensorAccessor32<float, 2, torch::RestrictPtrTraits> float_accessor;
 
 
 /**
@@ -112,9 +112,9 @@ void compute_hashes(torch::Tensor X, torch::Tensor A, torch::Tensor H) {
     int blocks = (N*B + threads - 1) / threads;
 
     hash_kernel<<<blocks, threads, shared_mem_planes>>>(
-        X.packed_accessor<float, 2, torch::RestrictPtrTraits>(),
-        A.packed_accessor<float, 2, torch::RestrictPtrTraits>(),
-        H.packed_accessor<int64_t, 1, torch::RestrictPtrTraits>(),
+        X.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
+        A.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
+        H.packed_accessor32<int64_t, 1, torch::RestrictPtrTraits>(),
         queries_per_block
     );
 }

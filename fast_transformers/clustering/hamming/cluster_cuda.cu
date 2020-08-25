@@ -8,12 +8,12 @@
 #include <curand_kernel.h>
 #include <torch/extension.h>
 
-typedef torch::PackedTensorAccessor<int32_t, 1, torch::RestrictPtrTraits> int32_accessor_1d;
-typedef torch::PackedTensorAccessor<int32_t, 3, torch::RestrictPtrTraits> int32_accessor_3d;
-typedef torch::PackedTensorAccessor<int32_t, 4, torch::RestrictPtrTraits> int32_accessor_4d;
-typedef torch::PackedTensorAccessor<int64_t, 3, torch::RestrictPtrTraits> int64_accessor_3d;
-typedef torch::PackedTensorAccessor<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
-typedef torch::PackedTensorAccessor<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
+typedef torch::PackedTensorAccessor32<int32_t, 1, torch::RestrictPtrTraits> int32_accessor_1d;
+typedef torch::PackedTensorAccessor32<int32_t, 3, torch::RestrictPtrTraits> int32_accessor_3d;
+typedef torch::PackedTensorAccessor32<int32_t, 4, torch::RestrictPtrTraits> int32_accessor_4d;
+typedef torch::PackedTensorAccessor32<int64_t, 3, torch::RestrictPtrTraits> int64_accessor_3d;
+typedef torch::PackedTensorAccessor32<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
+typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
 
 
 /**
@@ -261,13 +261,13 @@ void kmeans(
     torch::Tensor counts,
     int iterations
 ) {
-    const int64_accessor_3d hash_codes_acc = hash_codes.packed_accessor<int64_t, 3, torch::RestrictPtrTraits>();
-    const int32_accessor_1d lengths_acc = lengths.packed_accessor<int32_t, 1, torch::RestrictPtrTraits>();
-    int64_accessor_3d centroids_acc = centroids.packed_accessor<int64_t, 3, torch::RestrictPtrTraits>();
-    int32_accessor_3d distances_acc = distances.packed_accessor<int32_t, 3, torch::RestrictPtrTraits>();
-    int32_accessor_4d cluster_bit_counts_acc = cluster_bit_counts.packed_accessor<int32_t, 4, torch::RestrictPtrTraits>();
-    int32_accessor_3d labels_acc = labels.packed_accessor<int32_t, 3, torch::RestrictPtrTraits>();
-    int32_accessor_3d counts_acc = counts.packed_accessor<int32_t, 3, torch::RestrictPtrTraits>();
+    const int64_accessor_3d hash_codes_acc = hash_codes.packed_accessor32<int64_t, 3, torch::RestrictPtrTraits>();
+    const int32_accessor_1d lengths_acc = lengths.packed_accessor32<int32_t, 1, torch::RestrictPtrTraits>();
+    int64_accessor_3d centroids_acc = centroids.packed_accessor32<int64_t, 3, torch::RestrictPtrTraits>();
+    int32_accessor_3d distances_acc = distances.packed_accessor32<int32_t, 3, torch::RestrictPtrTraits>();
+    int32_accessor_4d cluster_bit_counts_acc = cluster_bit_counts.packed_accessor32<int32_t, 4, torch::RestrictPtrTraits>();
+    int32_accessor_3d labels_acc = labels.packed_accessor32<int32_t, 3, torch::RestrictPtrTraits>();
+    int32_accessor_3d counts_acc = counts.packed_accessor32<int32_t, 3, torch::RestrictPtrTraits>();
 
     const int N = hash_codes.size(0);
     const int H = hash_codes.size(1);

@@ -6,9 +6,9 @@
 
 #include <torch/extension.h>
 
-typedef torch::PackedTensorAccessor<int32_t, 3, torch::RestrictPtrTraits> int_accessor_3d;
-typedef torch::PackedTensorAccessor<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
-typedef torch::PackedTensorAccessor<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
+typedef torch::PackedTensorAccessor32<int32_t, 3, torch::RestrictPtrTraits> int_accessor_3d;
+typedef torch::PackedTensorAccessor32<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
+typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
 
 
 __global__ void aggregate_kernel(
@@ -67,10 +67,10 @@ void aggregate(
     int blocks = (L*N*H + threads - 1) / threads;
 
     aggregate_kernel<<<blocks, threads>>>(
-        X.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-        G.packed_accessor<int32_t, 3, torch::RestrictPtrTraits>(),
-        F.packed_accessor<float, 3, torch::RestrictPtrTraits>(),
-        Y.packed_accessor<float, 4, torch::RestrictPtrTraits>()
+        X.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        G.packed_accessor32<int32_t, 3, torch::RestrictPtrTraits>(),
+        F.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
+        Y.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
     );
 }
 
@@ -132,10 +132,10 @@ void broadcast(
     int blocks = (L*N*H + threads - 1) / threads;
 
     broadcast_kernel<<<blocks, threads>>>(
-        Y.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-        G.packed_accessor<int32_t, 3, torch::RestrictPtrTraits>(),
-        F.packed_accessor<float, 3, torch::RestrictPtrTraits>(),
-        X.packed_accessor<float, 4, torch::RestrictPtrTraits>()
+        Y.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        G.packed_accessor32<int32_t, 3, torch::RestrictPtrTraits>(),
+        F.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
+        X.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
     );
 }
 

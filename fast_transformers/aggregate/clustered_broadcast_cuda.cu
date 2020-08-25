@@ -6,11 +6,11 @@
 
 #include <torch/extension.h>
 
-typedef torch::PackedTensorAccessor<int64_t, 3, torch::RestrictPtrTraits> int64_accessor_3d;
-typedef torch::PackedTensorAccessor<int32_t, 3, torch::RestrictPtrTraits> int_accessor_3d;
-typedef torch::PackedTensorAccessor<int32_t, 1, torch::RestrictPtrTraits> int_accessor_1d;
-typedef torch::PackedTensorAccessor<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
-typedef torch::PackedTensorAccessor<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
+typedef torch::PackedTensorAccessor32<int64_t, 3, torch::RestrictPtrTraits> int64_accessor_3d;
+typedef torch::PackedTensorAccessor32<int32_t, 3, torch::RestrictPtrTraits> int_accessor_3d;
+typedef torch::PackedTensorAccessor32<int32_t, 1, torch::RestrictPtrTraits> int_accessor_1d;
+typedef torch::PackedTensorAccessor32<float, 3, torch::RestrictPtrTraits> float_accessor_3d;
+typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor_4d;
 
 __global__ void clustered_broadcast_kernel(
     const float_accessor_4d y,
@@ -128,10 +128,10 @@ void clustered_broadcast(
     int E = X.size(3);
     int C = Y.size(2);
 
-    int_accessor_3d block_map_acc = block_map.packed_accessor<int, 3, torch::RestrictPtrTraits>();
-    int_accessor_3d query_map_acc = query_map.packed_accessor<int, 3, torch::RestrictPtrTraits>();
-    int_accessor_3d cluster_counts_acc = cluster_counts.packed_accessor<int, 3, torch::RestrictPtrTraits>();
-    int64_accessor_3d sgi_acc = sorted_group_indices.packed_accessor<int64_t, 3, torch::RestrictPtrTraits>();
+    int_accessor_3d block_map_acc = block_map.packed_accessor32<int, 3, torch::RestrictPtrTraits>();
+    int_accessor_3d query_map_acc = query_map.packed_accessor32<int, 3, torch::RestrictPtrTraits>();
+    int_accessor_3d cluster_counts_acc = cluster_counts.packed_accessor32<int, 3, torch::RestrictPtrTraits>();
+    int64_accessor_3d sgi_acc = sorted_group_indices.packed_accessor32<int64_t, 3, torch::RestrictPtrTraits>();
 
     const int max_threads = 1024;
     const int threads = (max_threads < L) ? max_threads:L;
@@ -149,11 +149,11 @@ void clustered_broadcast(
     const int shared_mem =  (E+1) * sizeof(float);
 
     clustered_broadcast_kernel<<<blocks, threads, shared_mem>>>(
-        Y.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-        F.packed_accessor<float, 3, torch::RestrictPtrTraits>(),
-        G.packed_accessor<int, 3, torch::RestrictPtrTraits>(),
-        X.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-        lengths.packed_accessor<int, 1, torch::RestrictPtrTraits>(),
+        Y.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        F.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
+        G.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        X.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        lengths.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
         block_map_acc,
         query_map_acc,
         sgi_acc,
