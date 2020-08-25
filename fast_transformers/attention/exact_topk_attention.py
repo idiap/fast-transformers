@@ -25,13 +25,14 @@ class ExactTopKAttention(Module):
         softmax_temp: The temperature to use for the softmax attention.
                       (default: 1/sqrt(d_keys) where d_keys is computed at
                       runtime)
-        dropout_rate: The dropout rate to apply to the attention (default: 0.1)
+        attention_dropout: The dropout rate to apply to the attention
+                           (default: 0.1)
     """
-    def __init__(self, topk=32, softmax_temp=None, dropout_rate=0.1):
+    def __init__(self, topk=32, softmax_temp=None, attention_dropout=0.1):
         super(ExactTopKAttention, self).__init__()
         self.topk = topk
         self.softmax_temp = softmax_temp
-        self.dropout = Dropout(dropout_rate)
+        self.dropout = Dropout(attention_dropout)
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
@@ -74,6 +75,6 @@ AttentionRegistry.register(
     [
         ("topk", Optional(Int, 32)),
         ("softmax_temp", Optional(Float)),
-        ("dropout_rate", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1))
     ]
 )

@@ -24,12 +24,12 @@ class ConditionalFullAttention(Module):
         length_limit: An integer denoting the maximum sequence length to
                       consider.
         softmax_temp: See fast_transformers.attention.full_attention.
-        dropout_rate: See fast_transformers.attention.full_attention.
+        attention_dropout: See fast_transformers.attention.full_attention.
     """
     def __init__(self, other_attention, length_limit=512, softmax_temp=None,
-                 dropout_rate=0.1):
+                 attention_dropout=0.1):
         super(ConditionalFullAttention, self).__init__()
-        self.full_attention = FullAttention(softmax_temp, dropout_rate)
+        self.full_attention = FullAttention(softmax_temp, attention_dropout)
         self.other_attention = other_attention
         self.length_limit = length_limit
 
@@ -54,6 +54,6 @@ AttentionRegistry.register(
     [
         ("length_limit", Optional(Int, 512)),
         ("softmax_temp", Optional(Float)),
-        ("dropout_rate", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1))
     ]
 )
