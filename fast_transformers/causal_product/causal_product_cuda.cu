@@ -6,7 +6,7 @@
 
 #include <torch/extension.h>
 
-typedef torch::PackedTensorAccessor<float, 4, torch::RestrictPtrTraits> float_accessor;
+typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor;
 
 __device__ void get_result(
     const float_accessor queries,
@@ -148,11 +148,11 @@ void causal_dot_product(
     for (int l_offset=0; l_offset < L; l_offset += T) {
      causal_dot_product_kernel
             <<<blocks, MUL_PER_BLOCK, shared_mem_forward>>>(
-            queries.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            keys.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            values.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            kv.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            product.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
+            queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            product.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
             N, H, L, E, M, E_per_block, blocks_per_sequence, T, l_offset
         );
     }
@@ -424,14 +424,14 @@ void causal_dot_backward(
     for (int l_offset=0; l_offset < L; l_offset += T) {
         causal_dot_backward_query_key_kernel
             <<<blocks, MUL_PER_BLOCK, shared_mem_qk_backward>>>(
-            queries.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            keys.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            values.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_out.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            kv.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            kv_backward.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_queries.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_keys.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
+            queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            kv_backward.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
             N, H, L, E, M, M_per_block, blocks_per_sequence, T, l_offset
         );
     }
@@ -451,13 +451,13 @@ void causal_dot_backward(
     for (int l_offset=0; l_offset < L; l_offset += T) {
         causal_dot_backward_value_kernel
             <<<blocks_value, MPB, shared_mem_v_backward>>>(
-            queries.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            keys.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            values.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_out.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            kv.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_keys.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
-            grad_values.packed_accessor<float, 4, torch::RestrictPtrTraits>(),
+            queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
             N, H, L, E, M, E_per_block, blocks_per_sequence_value, T, l_offset
         );
     }

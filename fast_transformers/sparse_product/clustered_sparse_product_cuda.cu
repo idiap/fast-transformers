@@ -197,15 +197,15 @@ void clustered_sparse_dot_product(
     int C = topk.size(2);
     int S = K.size(2);
 
-    float* queries_p = Q.data<float>();
-    float* keys_p = K.data<float>();
-    int64_t* topk_p = topk.data<int64_t>();
-    int* lengths_p = lengths.data<int>();
-    float* product_p = product.data<float>();
-    int* block_map_p = block_map.data<int>();
-    int* query_map_p = query_map.data<int>();
-    int* cluster_counts_p = cluster_counts.data<int>();
-    int64_t* sorted_group_indices_p = sorted_group_indices.data<int64_t>();
+    float* queries_p = Q.data_ptr<float>();
+    float* keys_p = K.data_ptr<float>();
+    int64_t* topk_p = topk.data_ptr<int64_t>();
+    int* lengths_p = lengths.data_ptr<int>();
+    float* product_p = product.data_ptr<float>();
+    int* block_map_p = block_map.data_ptr<int>();
+    int* query_map_p = query_map.data_ptr<int>();
+    int* cluster_counts_p = cluster_counts.data_ptr<int>();
+    int64_t* sorted_group_indices_p = sorted_group_indices.data_ptr<int64_t>();
 
     int max_threads = 1024;
     int queries_per_block = (max_threads / k) < L ? (max_threads / k):L;
@@ -396,7 +396,7 @@ void clustered_sparse_weighted_average(
     auto groups_a = groups.packed_accessor<int, 3, torch::RestrictPtrTraits>();
     auto topk_a = topk.packed_accessor<int64_t, 4, torch::RestrictPtrTraits>();
     auto output_a = output.packed_accessor<float, 4, torch::RestrictPtrTraits>();
-    //float* output_p = output.data<float>();
+    //float* output_p = output.data_ptr<float>();
 
     int max_threads = 1024;
     int n_dim_per_thread = E;

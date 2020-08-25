@@ -40,10 +40,10 @@ void sparse_dot_product(
     int k = topk.size(3);
     int S = K.size(2);
 
-    float *queries = Q.data<float>();
-    float *keys = K.data<float>();
-    int64_t *topk_p = topk.data<int64_t>();
-    float *product_p = product.data<float>();
+    float *queries = Q.data_ptr<float>();
+    float *keys = K.data_ptr<float>();
+    int64_t *topk_p = topk.data_ptr<int64_t>();
+    float *product_p = product.data_ptr<float>();
 
     #pragma omp parallel for
     for (int n=0; n<N; n++) {
@@ -78,12 +78,12 @@ void sparse_dot_backward(
     int k = topk.size(3);
     int S = K.size(2);
 
-    float *queries = Q.data<float>();
-    float *keys = K.data<float>();
+    float *queries = Q.data_ptr<float>();
+    float *keys = K.data_ptr<float>();
     auto topk_a = topk.accessor<int64_t, 4>();
     auto grad_out_a = grad_out.accessor<float, 4>();
-    float *grad_q = grad_Q.data<float>();
-    float *grad_k = grad_K.data<float>();
+    float *grad_q = grad_Q.data_ptr<float>();
+    float *grad_k = grad_K.data_ptr<float>();
 
     #pragma omp parallel for
     for (int n=0; n<N; n++) {

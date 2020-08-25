@@ -102,7 +102,7 @@ void causal_dot_product(
     for (int n=0; n<N; n++) {
         for (int h=0; h<H; h++) {
             auto kv = torch::zeros({E, M}, queries.options());
-            float *kvp = kv.data<float>();
+            float *kvp = kv.data_ptr<float>();
             for (int l=0; l<L; l++) {
                 vvt_dot(
                     &ka[n][h][l][0],
@@ -159,7 +159,7 @@ void causal_dot_backward(
     for (int n=0; n<N; n++) {
         for (int h=0; h<H; h++) {
             auto kv = torch::zeros({E, M}, queries.options());
-            float *kvp = kv.data<float>();
+            float *kvp = kv.data_ptr<float>();
 
             // Compute the gradient wrt the queries
             for (int l=0; l<L; l++) {

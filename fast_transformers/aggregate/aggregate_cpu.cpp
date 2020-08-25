@@ -23,10 +23,10 @@ void aggregate(
     int E = X.size(3);
 
     int C = Y.size(2);
-    const float *x = X.data<float>();
-    const int32_t *g = G.data<int32_t>();
-    const float *f = F.data<float>();
-    float *y = Y.data<float>();
+    const float *x = X.data_ptr<float>();
+    const int32_t *g = G.data_ptr<int32_t>();
+    const float *f = F.data_ptr<float>();
+    float *y = Y.data_ptr<float>();
 
     // Aggregate all the Xs to the destination
     #pragma omp parallel for
@@ -69,10 +69,10 @@ void broadcast(
 
     int C = Y.size(2);
 
-    const float *y = Y.data<float>();
-    const int32_t *g = G.data<int32_t>();
-    const float *f = F.data<float>();
-    float *x = X.data<float>();
+    const float *y = Y.data_ptr<float>();
+    const int32_t *g = G.data_ptr<int32_t>();
+    const float *f = F.data_ptr<float>();
+    float *x = X.data_ptr<float>();
 
     // Broadcast all the Ys back into Xs
     // For now the parallelization is over L.
