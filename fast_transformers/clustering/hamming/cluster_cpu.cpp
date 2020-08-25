@@ -20,6 +20,28 @@
 
 
 /**
+ * Define a template in order to make it seamless to use the random number
+ * generator both in pytorch 1.5 and 1.6 .
+ */
+template <typename T>
+static inline uint32_t call_random(T* gen) {
+    // See Note [Acquire lock when using random generators]
+    // in pytorch/pytorch/aten/src/ATen/core/Generator.h
+    std::lock_guard<std::mutex> lock(gen->mutex_);
+    return gen->random();
+}
+template <typename T>
+static inline uint32_t call_random(T &gen) {
+    auto gen_impl = gen.template get<at::CPUGeneratorImpl>();
+
+    // See Note [Acquire lock when using random generators]
+    // in pytorch/pytorch/aten/src/ATen/core/Generator.h
+    std::lock_guard<std::mutex> lock(gen_impl->mutex_);
+    return gen_impl->random();
+}
+
+
+/**
  * Initialize with the first K hashes.
  */
 void initialize(const torch::Tensor hashes, torch::Tensor centroids) {
@@ -133,7 +155,7 @@ void recompute_centroids(
                     }
                     centroid_a[n][h][k] = c;
                 } else {
-                    int64_t c = at::detail::getDefaultCPUGenerator()->random();
+                    int64_t c = call_random(at::detail::getDefaultCPUGenerator());
                     centroid_a[n][h][k] = c & ((1L<<bits)-1);
                 }
             }
