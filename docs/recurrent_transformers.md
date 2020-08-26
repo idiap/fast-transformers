@@ -6,15 +6,15 @@ module are processing the entire sequence simultaneously. On the other hand,
 this module implements transfomers as recurrent networks. Namely as networks
 that process the sequence one element at a time while updating some state.
 
-Since this API is subject to change we will briefly go over the current
-differences in comparison to the normal transformers API.
+The TransformerEncoder and TransformerEncoderLayer give way to
+[RecurrentTransformerEncoder][2] and [RecurrentTransformerEncoderLayer][3] and
+for the decoders [RecurrentTransformerDecoder][7] and
+[RecurrentTransformerDecoderLayer][8] respectively.
 
 Forward method
 --------------
 
-The TransformerEncoder and TransformerEncoderLayer give way to
-[RecurrentTransformerEncoder][2] and [RecurrentTransformerEncoderLayer][3] and
-the `forward()` method changes as follows:
+**RecurrentTransformerEncoder** or **RecurrentTransformerEncoderLayer**
 
 ```
 forward(x, state=None)
@@ -28,6 +28,31 @@ forward(x, state=None)
 * **state**: The state is a python object that varies depending on the
   attention implementation
 
+
+**RecurrentTransformerDecoder** or **RecurrentTransformerDecoderLayer**
+
+```
+forward(x, memory, memory_length_mask=None, state=None)
+```
+
+* **x**: The input features of shape (N, E) where N is the batch size and E is
+  `d_model` passed in the constructor. Note that x corresponds to a specific
+  element in the sequence and not the entire sequence.
+* **memory**: A sequence of features (N, S, E) that the input will attend
+  to. S is the sequence length and E is the same as for x.
+* **memory\_length\_mask**: An implementation of a BaseMask that encodes
+  how many elements each memory sequence in the batch consists of.
+* **state**: The state is a python object that varies depending on the
+  attention implementation
+
+<div class="admonition note">
+    <p class="admonition-title">Note</p>
+    <p>The masks are different in the recurrent implementations than in their
+    batch counterparts. Namely, recurrent encoders and decoders enforce a
+    triangular causal mask on self attention. In addition, recurrent decoders
+    enforce a full mask on cross attention.</p>
+</div>
+
 Available Attentions
 --------------------
 
@@ -38,14 +63,6 @@ transformers. The current list for recurrent attention implementations is:
 
 * [LinearAttention][4]
 * [FullAttention][5]
-
-Builder
--------
-
-Building a `RecurrentTransformerEncoder` is very similar to building a
-`TransformerEncoder`. We simply provide a different builder named
-[RecurrentEncoderBuilder][6] that constructs `RecurrentTransformerEncoder`
-models.
 
 Example
 -------
@@ -83,6 +100,8 @@ for i in range(100):
 [1]: /api_docs/fast_transformers/transformers.html
 [2]: /api_docs/fast_transformers/recurrent/transformers.html#fast_transformers.recurrent.transformers.RecurrentTransformerEncoder
 [3]: /api_docs/fast_transformers/recurrent/transformers.html#fast_transformers.recurrent.transformers.RecurrentTransformerEncoderLayer
-[4]: /api_docs/fast_transformers/recurrent/attention/linear_attention.html
-[5]: /api_docs/fast_transformers/recurrent/attention/full_attention.html
-[6]: /api_docs/fast_transformers/builders/recurrent_encoder_builder.html
+[4]: /api_docs/fast_transformers/recurrent/attention/self_attention/linear_attention.html
+[5]: /api_docs/fast_transformers/recurrent/attention/self_attention/full_attention.html
+[6]: /api_docs/fast_transformers/builders/transformer_builders.html
+[7]: /api_docs/fast_transformers/recurrent/transformers.html#fast_transformers.recurrent.transformers.RecurrentTransformerDecoder
+[8]: /api_docs/fast_transformers/recurrent/transformers.html#fast_transformers.recurrent.transformers.RecurrentTransformerDecoderLayer
