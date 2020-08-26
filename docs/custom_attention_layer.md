@@ -13,9 +13,10 @@ Our attention layer will follow closely the implementation of
 
 ```python
 class QuadraticAttention(Module):
-    def __init__(self, eps=1e-6):
+    def __init__(self, quadratic_temp=1.0, eps=1e-6):
         super(QuadraticAttention, self).__init__()
         self.eps = eps
+        self.quadratic_temp = quadratic_temp
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
@@ -28,15 +29,16 @@ attention part.
 
 ```python
 class QuadraticAttention(Module):
-    def __init__(self, eps=1e-6):
+    def __init__(self, quadratic_temp=1.0, eps=1e-6):
         super(QuadraticAttention, self).__init__()
         self.eps = eps
+        self.quadratic_temp = quadratic_temp
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
         # compute the unnormalized attention
         QK = torch.einsum("nlhe,nshe->nhls", queries, keys) # compute the dot products
-        QK = torch.square(QK) # implement our custom attention twist
+        QK = torch.square(self.quadratic_temp * QK) # implement our custom attention twist
         QK = QK * attn_mask.float_matrix # use the attention mask as a multiplicative mask
         QK = QK * key_lengths.float_matrix[:, None, None] # also a multiplicative mask
 
@@ -50,45 +52,36 @@ class QuadraticAttention(Module):
 Integrate with the Builder
 --------------------------
 
-To add it as an option to the `TransformerEncoderBuilder` we have to edit two
-files. Firstly, we have to add it as an option to the
-[AttentionBuilder.attention_type][3] as follows:
+To add it as an option to the `TransformerEncoderBuilder` or the
+`TransformerDecoderBuilder` we have to register our new attention in the
+appropriate [attention registry](builders.md#attention-registry). The available
+registries are
+
+* AttentionRegistry
+* RecurrentAttentionRegistry
+* RecurrentCrossAttentionRegistry
+
+Similar to [FullAttention][1] we will use `AttentionRegistry` because our
+implementation is not recurrent. The following snippet integrates our quadratic
+attention with the builders.
 
 ```python
-class AttentionBuilder(object):
-    ...
-    ...
-    @attention_type.setter
-    def attention_type(self, val):
-        attentions = ["full", "clustered", "improved-clustered",
-                      "improved-causal", "linear", "causal-linear",
-                      "reformer", "exact-topk", "square"] # add the 'square' to the list
-        if val not in attentions:
-            raise ValueError(("{!r} is not one of the available attention "
-                              "types {!r}").format(val, attentions))
-        self._attention_type = val
-    ...
-    ...
+from fast_transformers.attention_registry import AttentionRegistry, \
+    Optional, Float  # we also need these to add our new
+                     # parameter 'quadratic_temp'
+
+AttentionRegistry.register(
+    "square", QuadraticAttention,  # attention_type, class pair
+    [
+        ("quadratic_temp", Optional(Float, 1.0))  # an optional parameter named
+                                                  # 'quadratic_temp' of type
+                                                  # float and with default
+                                                  # value 1.0
+    ]
+)
 ```
 
-Secondly, we have to edit the [TransformerEncoderBuilder][4] to create the
-correct attention layer when the attention\_type is set to 'square'.
-
-```python
-class TransformerEncoderBuilder(BaseTransformerBuilder):
-    ...
-    ...
-    def _get_attention(self):
-        attentions = {
-            ...
-            ...
-            "square": QuadraticAttention
-        }
-        ...
-        ...
-```
-
-After those changes we can use the builder to create transformers with our new
+Afterwards we can use the builder to create transformers with our new
 attention layer.
 
 ```python
@@ -99,17 +92,10 @@ quadratic_bert = TransformerEncoderBuilder.from_kwargs(
     query_dimensions=64,
     value_dimensions=64,
     feed_forward_dimensions=3072,
-    activation="gelu"
+    activation="gelu",
+    quadratic_temp=5.0  # set the temperature for our quadratic layer
 )
 ```
-
-Future changes
---------------
-
-Editing two files to add a new attention implementation to a transformer
-builder is obviously suboptimal. We are in the process of changing this
-procedure with a more streamlined way of registering new attention layers to
-the transformer builders.
 
 
 [1]: https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/full_attention.py

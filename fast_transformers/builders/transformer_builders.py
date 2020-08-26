@@ -125,7 +125,7 @@ class BaseTransformerBuilder(BaseBuilder):
         raise NotImplementedError()
 
 
-class _BaseTransformerEncoderBuilder(BaseTransformerBuilder):
+class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
     """Implement the logic of building a transformer encoder but leave the
     specific layers open for changing by the inheriting classes. This allows us
     to reuse the logic for creating both the TransformerEncoder and the
@@ -139,7 +139,7 @@ class _BaseTransformerEncoderBuilder(BaseTransformerBuilder):
     - _get_encoder_layer_class()
     """
     def __init__(self):
-        super(_BaseTransformerEncoderBuilder, self).__init__()
+        super(BaseTransformerEncoderBuilder, self).__init__()
         self._attention_builder = self._get_attention_builder()
         self._attention_type = "full"
 
@@ -219,7 +219,7 @@ class _BaseTransformerEncoderBuilder(BaseTransformerBuilder):
         )
 
 
-class TransformerEncoderBuilder(_BaseTransformerEncoderBuilder):
+class TransformerEncoderBuilder(BaseTransformerEncoderBuilder):
     """Build a batch transformer encoder for training or processing of
     sequences all elements at a time.
 
@@ -254,7 +254,7 @@ class TransformerEncoderBuilder(_BaseTransformerEncoderBuilder):
         return TransformerEncoderLayer
 
 
-class RecurrentEncoderBuilder(_BaseTransformerEncoderBuilder):
+class RecurrentEncoderBuilder(BaseTransformerEncoderBuilder):
     """Build a transformer encoder for autoregressive processing of sequences.
 
     Example usage:
@@ -288,8 +288,8 @@ class RecurrentEncoderBuilder(_BaseTransformerEncoderBuilder):
         return RecurrentTransformerEncoderLayer
 
 
-class _BaseTransformerDecoderBuilder(BaseTransformerBuilder):
-    """Similar to _BaseTransformerEncoderBuilder implement the logic of
+class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
+    """Similar to BaseTransformerEncoderBuilder implement the logic of
     building the transformer decoder without defining concrete layers.
 
     Inheriting classes should implement the following:
@@ -300,7 +300,7 @@ class _BaseTransformerDecoderBuilder(BaseTransformerBuilder):
     - _get_decoder_layer_class()
     """
     def __init__(self):
-        super(_BaseTransformerDecoderBuilder, self).__init__()
+        super(BaseTransformerDecoderBuilder, self).__init__()
         self._self_attention_builder = self._get_self_attention_builder()
         self._cross_attention_builder = self._get_cross_attention_builder()
         self._self_attention_type = "full"
@@ -418,7 +418,7 @@ class _BaseTransformerDecoderBuilder(BaseTransformerBuilder):
         )
 
 
-class TransformerDecoderBuilder(_BaseTransformerDecoderBuilder):
+class TransformerDecoderBuilder(BaseTransformerDecoderBuilder):
     """Build a transformer decoder for training or processing of sequences all
     elements at a time.
 
@@ -465,7 +465,7 @@ class TransformerDecoderBuilder(_BaseTransformerDecoderBuilder):
         return TransformerDecoderLayer
 
 
-class RecurrentDecoderBuilder(_BaseTransformerDecoderBuilder):
+class RecurrentDecoderBuilder(BaseTransformerDecoderBuilder):
     """Build a transformer decoder for processing of sequences in
     autoregressive fashion.
 
