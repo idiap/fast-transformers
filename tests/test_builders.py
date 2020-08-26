@@ -136,6 +136,25 @@ class TestBuilders(unittest.TestCase):
             with self.assertRaises(AttributeError):
                 setattr(builder, name, None)
 
+    def test_attention_composition(self):
+        transformer = TransformerEncoderBuilder.from_kwargs(
+            attention_type="conditional-full:improved-clustered",
+            attention_dropout=0.1,
+            softmax_temp=0.125,
+            clusters=256,
+            bits=32,
+            topk=32,
+            length_limit=512
+        ).get()
+
+        with self.assertRaises(TypeError):
+            transformer = TransformerEncoderBuilder.from_kwargs(
+                attention_type="conditional-full",
+                attention_dropout=0.1,
+                softmax_temp=0.125,
+                length_limit=512
+            ).get()
+
 
 if __name__ == "__main__":
     unittest.main()
