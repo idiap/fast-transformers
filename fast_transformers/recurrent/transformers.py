@@ -21,6 +21,7 @@ import torch
 from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList
 import torch.nn.functional as F
 
+from ..masking import LengthMask
 from ._utils import check_state
 
 
@@ -187,7 +188,7 @@ class RecurrentTransformerDecoderLayer(Module):
         N = x.shape[0]
         L = memory.shape[1]
         memory_length_mask = memory_length_mask or \
-            LengthMask(x.new_full((N,)), L, dtype=torch.int64)
+            LengthMask(x.new_full((N,), L, dtype=torch.int64))
 
         # Extract the individual states for the self attention and the cross
         # attention

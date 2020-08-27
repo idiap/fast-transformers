@@ -76,6 +76,26 @@ class TestRecurrentTransformerDecoder(unittest.TestCase):
 
             self.assertLess(torch.abs(y1-y2).max(), 1e-5)
 
+    def test_mask_creation(self):
+        N = 10
+        L = 42
+        S = 100
+        D = 1024
+        x = torch.rand(N, D)
+        m = torch.rand(N, S, D)
+
+        rdec = RecurrentTransformerDecoder([
+            RecurrentTransformerDecoderLayer(
+                RecurrentAttentionLayer(RecurrentFullAttention(), D, 4),
+                RecurrentCrossAttentionLayer(
+                    RecurrentCrossFullAttention(), D, 4
+                ),
+                D
+            )
+            for i in range(4)
+        ])
+        rdec(x, m)
+
 
 if __name__ == "__main__":
     unittest.main()
