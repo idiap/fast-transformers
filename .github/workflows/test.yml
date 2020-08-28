@@ -1,0 +1,32 @@
+# Test at least the CPU part since there are no GPU runners
+name: tests
+
+# Test only pushes on master or pull requests on master
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Build and run the tests
+jobs:
+  test:
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8]
+        pytorch-version: [1.3.1, 1.5.0, 1.6.0]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          mkdir miniconda
+          wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda/miniconda.sh
+          bash miniconda/miniconda.sh -b -u -p $(pwd)/miniconda
+          rm miniconda/miniconda.sh
+      - run: echo "::add-path::$(pwd)/miniconda/bin:$PATH"
+      - run: conda install -y python=${{ matrix.python-version }}
+      - run: conda install -y -c pytorch pytorch=${{ matrix.pytorch-version }}
+      - run: conda install -y -c conda-forge cudatoolkit-dev
+      - run: python setup.py build_ext --inplace
+      - run: pip install -e .
+      - run: python -m unittest discover -s $GITHUB_WORKSPACE/tests -v
