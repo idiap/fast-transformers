@@ -14,6 +14,7 @@ import torch
 from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList
 import torch.nn.functional as F
 
+from .events import EventDispatcher
 from .masking import FullMask, LengthMask
 
 
@@ -35,9 +36,12 @@ class TransformerEncoderLayer(Module):
                  (default: 0.1)
         activation: {'relu', 'gelu'} Which activation to use for the feed
                     forward part of the layer (default: relu)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, attention, d_model, n_heads, d_ff=None, dropout=0.1,
-                 activation="relu"):
+                 activation="relu", event_dispatcher=""):
         super(TransformerEncoderLayer, self).__init__()
         d_ff = d_ff or 4*d_model
         self.attention = attention
@@ -47,6 +51,7 @@ class TransformerEncoderLayer(Module):
         self.norm2 = LayerNorm(d_model)
         self.dropout = Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, attn_mask=None, length_mask=None):
         """Apply the transformer encoder to the input x.
@@ -98,11 +103,15 @@ class TransformerEncoder(Module):
                 implement the same interface.
         norm_layer: A normalization layer to be applied to the final output
                     (default: None which means no normalization)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, layers, norm_layer=None):
+    def __init__(self, layers, norm_layer=None, event_dispatcher=""):
         super(TransformerEncoder, self).__init__()
         self.layers = ModuleList(layers)
         self.norm = norm_layer
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, attn_mask=None, length_mask=None):
         """Apply all transformer encoder layers to the input x.
@@ -157,9 +166,12 @@ class TransformerDecoderLayer(Module):
                  (default: 0.1)
         activation: {'relu', 'gelu'} Which activation to use for the feed
                     forward part of the layer (default: relu)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, self_attention, cross_attention, d_model, d_ff=None,
-                 dropout=0.1, activation="relu"):
+                 dropout=0.1, activation="relu", event_dispatcher=""):
         super(TransformerDecoderLayer, self).__init__()
         d_ff = d_ff or 4*d_model
         self.self_attention = self_attention
@@ -171,6 +183,7 @@ class TransformerDecoderLayer(Module):
         self.norm3 = LayerNorm(d_model)
         self.dropout = Dropout(dropout)
         self.activation = F.relu if activation == "relu" else F.gelu
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, memory, x_mask=None, x_length_mask=None,
                 memory_mask=None, memory_length_mask=None):
@@ -247,11 +260,15 @@ class TransformerDecoder(Module):
                 implement the same interface
         norm_layer: A normalization layer to be applied to the final output
                     (default: None which means no normalization)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, layers, norm_layer=None):
+    def __init__(self, layers, norm_layer=None, event_dispatcher=""):
         super(TransformerDecoder, self).__init__()
         self.layers = ModuleList(layers)
         self.norm = norm_layer
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, memory, x_mask=None, x_length_mask=None,
                 memory_mask=None, memory_length_mask=None):

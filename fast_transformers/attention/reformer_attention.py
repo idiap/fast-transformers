@@ -14,6 +14,7 @@ from torch.nn import Dropout, Module
 from torch.nn.init import normal_
 
 from ..attention_registry import AttentionRegistry, Optional, Int, Float, Bool
+from ..events import EventDispatcher
 from ..masking import FullMask
 
 
@@ -32,10 +33,14 @@ class ReformerAttention(Module):
                       runtime)
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.1)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
 
     def __init__(self, chunk_size=32, bits=8, rounds=4, masked=False,
-                 softmax_temp=None, attention_dropout=0.1):
+                 softmax_temp=None, attention_dropout=0.1,
+                 event_dispatcher=""):
         super(ReformerAttention, self).__init__()
 
         self.chunk_size = chunk_size
@@ -44,6 +49,7 @@ class ReformerAttention(Module):
         self.masked = masked
         self.softmax_temp = softmax_temp
         self.dropout = Dropout(attention_dropout)
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def _normalize(self, x):
         norms = torch.sqrt(torch.einsum("nlhe,nlhe->nlh", x, x))

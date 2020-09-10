@@ -15,6 +15,7 @@ import torch
 from torch.nn import Dropout, Module
 
 from ..attention_registry import AttentionRegistry, Optional, Float
+from ..events import EventDispatcher
 
 
 class FullAttention(Module):
@@ -27,11 +28,16 @@ class FullAttention(Module):
                       runtime)
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.1)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, softmax_temp=None, attention_dropout=0.1):
+    def __init__(self, softmax_temp=None, attention_dropout=0.1,
+                 event_dispatcher=""):
         super(FullAttention, self).__init__()
         self.softmax_temp = softmax_temp
         self.dropout = Dropout(attention_dropout)
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
