@@ -38,6 +38,7 @@ class BaseTransformerBuilder(BaseBuilder):
         self._dropout = 0.1
         self._activation = "relu"
         self._final_norm = True
+        self._event_dispatcher = ""  # the default global dispatcher
 
     @property
     def n_layers(self):
@@ -120,6 +121,16 @@ class BaseTransformerBuilder(BaseBuilder):
     def final_normalization(self, val):
         self._final_norm = bool(val)
 
+    @property
+    def event_dispatcher(self):
+        """The transformer event dispatcher either as a string or as an
+        EventDispatcher object."""
+        return self._event_dispatcher
+
+    @event_dispatcher.setter
+    def event_dispatcher(self, event_dispatcher):
+        self._event_dispatcher = event_dispatcher
+
     def get(self):
         """Build the transformer and return it."""
         raise NotImplementedError()
@@ -191,6 +202,9 @@ class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
 
     def get(self):
         """Build the transformer and return it."""
+        # Set the event dispatcher to the attention builder
+        self.attention.event_dispatcher = self.event_dispatcher
+
         # Extract into local variables the classes to be used
         Encoder = self._get_encoder_class()
         EncoderLayer = self._get_encoder_layer_class()
@@ -205,17 +219,20 @@ class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
                         model_dimensions,
                         self.n_heads,
                         d_keys=self.query_dimensions,
-                        d_values=self.value_dimensions
+                        d_values=self.value_dimensions,
+                        event_dispatcher=self.event_dispatcher
                     ),
                     model_dimensions,
                     self.n_heads,  # Should be removed (see #7)
                     self.feed_forward_dimensions,
                     self.dropout,
-                    self.activation
+                    self.activation,
+                    event_dispatcher=self.event_dispatcher
                 )
                 for _ in range(self.n_layers)
             ],
-            (LayerNorm(model_dimensions) if self.final_normalization else None)
+            (LayerNorm(model_dimensions) if self.final_normalization else None),
+            event_dispatcher=self.event_dispatcher
         )
 
 
@@ -383,6 +400,10 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
 
     def get(self):
         """Build the transformer and return it."""
+        # Set the event dispatcher to attention builders
+        self.self_attention.event_dispatcher = self.event_dispatcher
+        self.cross_attention.event_dispatcher = self.event_dispatcher
+
         # Extract into local variables the classes to be used
         Decoder = self._get_decoder_class()
         DecoderLayer = self._get_decoder_layer_class()
@@ -398,23 +419,27 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
                         model_dimensions,
                         self.n_heads,
                         d_keys=self.query_dimensions,
-                        d_values=self.value_dimensions
+                        d_values=self.value_dimensions,
+                        event_dispatcher=self.event_dispatcher
                     ),
                     CrossAttention(
                         self.cross_attention.get(self.cross_attention_type),
                         model_dimensions,
                         self.n_heads,
                         d_keys=self.query_dimensions,
-                        d_values=self.value_dimensions
+                        d_values=self.value_dimensions,
+                        event_dispatcher=self.event_dispatcher
                     ),
                     model_dimensions,
                     self.feed_forward_dimensions,
                     self.dropout,
-                    self.activation
+                    self.activation,
+                    event_dispatcher=self.event_dispatcher
                 )
                 for _ in range(self.n_layers)
             ],
-            (LayerNorm(model_dimensions) if self.final_normalization else None)
+            (LayerNorm(model_dimensions) if self.final_normalization else None),
+            event_dispatcher=self.event_dispatcher
         )
 
 

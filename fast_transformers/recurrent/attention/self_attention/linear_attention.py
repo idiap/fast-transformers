@@ -10,7 +10,8 @@ import torch
 from torch.nn import Module
 
 from ....attention_registry import RecurrentAttentionRegistry, Optional, \
-    Callable
+    Callable, EventDispatcherInstance
+from ....events import EventDispatcher
 from ..._utils import check_state
 
 
@@ -32,11 +33,15 @@ class RecurrentLinearAttention(Module):
                      last dimension of a tensor (default: elu(x)+1)
         eps: float, a small number to ensure the numerical stability of the
              denominator (default: 1e-6)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, feature_map=None, eps=1e-6):
+    def __init__(self, feature_map=None, eps=1e-6, event_dispatcher=""):
         super(RecurrentLinearAttention, self).__init__()
         self.feature_map = feature_map or elu_feature_map
         self.eps = eps
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, key, value, state=None, memory=None):
         # Normalize state/memory
@@ -84,9 +89,15 @@ class RecurrentLinearAttention(Module):
 # builders
 RecurrentAttentionRegistry.register(
     "linear", RecurrentLinearAttention,
-    [("feature_map", Optional(Callable))]
+    [
+        ("feature_map", Optional(Callable)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
 )
 RecurrentAttentionRegistry.register(
     "causal-linear", RecurrentLinearAttention,
-    [("feature_map", Optional(Callable))]
+    [
+        ("feature_map", Optional(Callable)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
 )

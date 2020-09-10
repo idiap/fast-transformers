@@ -10,7 +10,8 @@ import torch
 from torch.nn import Module
 
 from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, \
-    Callable
+    Callable, EventDispatcherInstance
+from ....events import EventDispatcher
 
 
 def elu_feature_map(x):
@@ -29,11 +30,15 @@ class RecurrentCrossLinearAttention(Module):
                      last dimension of a tensor (default: elu(x)+1)
         eps: float, a small number to ensure the numerical stability of the
              denominator (default: 1e-6)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, feature_map=None, eps=1e-6):
+    def __init__(self, feature_map=None, eps=1e-6, event_dispatcher=""):
         super(RecurrentCrossLinearAttention, self).__init__()
         self.feature_map = feature_map or elu_feature_map
         self.eps = eps
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, keys, values, key_lengths, state=None):
         # Compute the feature representation of the query
@@ -61,5 +66,8 @@ class RecurrentCrossLinearAttention(Module):
 # builders
 RecurrentCrossAttentionRegistry.register(
     "linear", RecurrentCrossLinearAttention,
-    [("feature_map", Optional(Callable))]
+    [
+        ("feature_map", Optional(Callable)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
 )

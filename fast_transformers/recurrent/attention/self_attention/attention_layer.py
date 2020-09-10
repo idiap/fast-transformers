@@ -10,6 +10,7 @@ leaving the implementation of the attention to the inner attention module."""
 
 from torch.nn import Linear, Module
 
+from ....events import EventDispatcher
 from ..._utils import check_state
 
 
@@ -30,9 +31,12 @@ class RecurrentAttentionLayer(Module):
         d_keys: The dimensionality of the keys/queries
                 (default: d_model/n_heads)
         d_values: The dimensionality of the values (default: d_model/n_heads)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, attention, d_model, n_heads, d_keys=None,
-                 d_values=None):
+                 d_values=None, event_dispatcher=""):
         super(RecurrentAttentionLayer, self).__init__()
 
         # Fill d_keys and d_values
@@ -45,6 +49,7 @@ class RecurrentAttentionLayer(Module):
         self.value_projection = Linear(d_model, d_values * n_heads)
         self.out_projection = Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, key, value, state=None, memory=None):
         """Apply attention to the passed in query/key/value after projecting

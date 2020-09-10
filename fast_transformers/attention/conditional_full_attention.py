@@ -10,7 +10,8 @@ attention depending on the input sequence length."""
 import torch
 from torch.nn import Module
 
-from ..attention_registry import AttentionRegistry, Optional, Int, Float
+from ..attention_registry import AttentionRegistry, Optional, Int, Float, \
+    EventDispatcherInstance
 from ..events import EventDispatcher
 from .full_attention import FullAttention
 
@@ -59,6 +60,7 @@ AttentionRegistry.register(
     [
         ("length_limit", Optional(Int, 512)),
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

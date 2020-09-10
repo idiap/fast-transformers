@@ -6,6 +6,8 @@
 """Spec instances allow to describe and check the type and value of
 parameters."""
 
+from ..events import EventDispatcher
+
 
 class Spec(object):
     """Describe and validate a parameter type.
@@ -105,3 +107,7 @@ Int = Spec(int, "Int")
 Float = Spec(float, "Float")
 Bool = Spec(bool, "Bool")
 Callable = _Callable()
+EventDispatcherInstance = Spec(
+    lambda x: isinstance(x, (str, EventDispatcher)),
+    "EventDispatcher"
+)

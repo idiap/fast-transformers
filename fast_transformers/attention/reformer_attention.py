@@ -13,7 +13,8 @@ import torch
 from torch.nn import Dropout, Module
 from torch.nn.init import normal_
 
-from ..attention_registry import AttentionRegistry, Optional, Int, Float, Bool
+from ..attention_registry import AttentionRegistry, Optional, Int, Float, \
+    Bool, EventDispatcherInstance
 from ..events import EventDispatcher
 from ..masking import FullMask
 
@@ -159,6 +160,7 @@ AttentionRegistry.register(
         ("rounds", Optional(Int, 4)),
         ("masked", Optional(Bool, False)),
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

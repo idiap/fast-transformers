@@ -13,4 +13,5 @@ from .registry import \
     AttentionRegistry, \
     RecurrentAttentionRegistry, \
     RecurrentCrossAttentionRegistry
-from .spec import Spec, Choice, Optional, Int, Float, Bool, Callable
+from .spec import Spec, Choice, Optional, Int, Float, Bool, Callable, \
+    EventDispatcherInstance

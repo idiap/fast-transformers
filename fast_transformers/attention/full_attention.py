@@ -14,7 +14,8 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
-from ..attention_registry import AttentionRegistry, Optional, Float
+from ..attention_registry import AttentionRegistry, Optional, Float, \
+    EventDispatcherInstance
 from ..events import EventDispatcher, AttentionEvent
 
 
@@ -83,6 +84,7 @@ AttentionRegistry.register(
     "full", FullAttention,
     [
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

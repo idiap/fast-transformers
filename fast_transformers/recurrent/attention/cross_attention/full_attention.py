@@ -12,7 +12,8 @@ import torch
 from torch.nn import Dropout, Module
 
 from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, \
-    Float
+    Float, EventDispatcherInstance
+from ....events import EventDispatcher
 
 class RecurrentCrossFullAttention(Module):
     """Implement autoregressive softmax cross attention as a recurrent
@@ -25,11 +26,16 @@ class RecurrentCrossFullAttention(Module):
                       runtime)
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.1)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, softmax_temp=None, attention_dropout=0.1):
+    def __init__(self, softmax_temp=None, attention_dropout=0.1,
+                 event_dispatcher=""):
         super(RecurrentCrossFullAttention, self).__init__()
         self.softmax_temp = softmax_temp
         self.dropout = Dropout(attention_dropout)
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, keys, values, key_lengths, state=None):
         # Extract some shapes and compute the temperature
@@ -58,6 +64,7 @@ RecurrentCrossAttentionRegistry.register(
     "full", RecurrentCrossFullAttention,
     [
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

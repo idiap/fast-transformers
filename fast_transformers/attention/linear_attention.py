@@ -9,7 +9,8 @@
 import torch
 from torch.nn import Module
 
-from ..attention_registry import AttentionRegistry, Optional, Callable
+from ..attention_registry import AttentionRegistry, Optional, Callable, \
+    EventDispatcherInstance
 from ..events import EventDispatcher
 
 
@@ -81,5 +82,8 @@ class LinearAttention(Module):
 # builders
 AttentionRegistry.register(
     "linear", LinearAttention,
-    [("feature_map", Optional(Callable))]
+    [
+        ("feature_map", Optional(Callable)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
 )
