@@ -15,7 +15,7 @@ import torch
 from torch.nn import Dropout, Module
 
 from ..attention_registry import AttentionRegistry, Optional, Float
-from ..events import EventDispatcher
+from ..events import EventDispatcher, AttentionEvent
 
 
 class FullAttention(Module):
@@ -69,6 +69,9 @@ class FullAttention(Module):
         # Compute the attention and the weighted average
         A = self.dropout(torch.softmax(softmax_temp * QK, dim=-1))
         V = torch.einsum("nhls,nshd->nlhd", A, values)
+
+        # Let the world know of the attention matrix
+        self.event_dispatcher.dispatch(AttentionEvent(self, A))
 
         # Make sure that what we return is contiguous
         return V.contiguous()

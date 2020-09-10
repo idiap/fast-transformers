@@ -7,7 +7,7 @@ import unittest
 
 import torch
 
-from fast_transformers.events import EventDispatcher, QKVEvent
+from fast_transformers.events import EventDispatcher, QKVEvent, AttentionEvent
 from fast_transformers.events.filters import layer_name_contains
 from fast_transformers.builders import TransformerEncoderBuilder
 
@@ -19,6 +19,7 @@ class TestEvents(unittest.TestCase):
             d["q"] = event.queries
             d["k"] = event.keys
             d["v"] = event.values
+        # default transformer is 4 layers 4 heads
         transformer = TransformerEncoderBuilder().get()
         x = transformer(torch.rand(1, 100, 64*4))
         self.assertEqual(len(d), 0)
@@ -48,6 +49,21 @@ class TestEvents(unittest.TestCase):
         x = transformer(torch.rand(1, 100, 64*4))
         self.assertEqual(len(d), 0)
         d.clear()
+        EventDispatcher.get().clear()
+
+    def test_attention_matrix(self):
+        A = []
+        def store_attention(event):
+            A.append(event.attention_matrix)
+        # default transformer is 4 layers 4 heads
+        transformer = TransformerEncoderBuilder().get()
+        x = transformer(torch.rand(1, 100, 64*4))
+        self.assertEqual(len(A), 0)
+
+        EventDispatcher.get().listen(AttentionEvent, store_attention)
+        x = transformer(torch.rand(1, 100, 64*4))
+        self.assertEqual(len(A), 4)
+
 
 
 if __name__ == "__main__":
