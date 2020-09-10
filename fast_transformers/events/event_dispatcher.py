@@ -5,6 +5,7 @@
 
 from collections import OrderedDict
 
+from .event import Event
 from .filters import event_class
 
 
@@ -31,6 +32,8 @@ class EventDispatcher(object):
             attention_event_handler
         )
     """
+    _dispatchers = {}
+
     def __init__(self):
         self._listeners = OrderedDict()
 
@@ -48,6 +51,15 @@ class EventDispatcher(object):
 
         self._listeners[event_handler] = event_filter
 
+    def remove(self, event_handler):
+        """Remove the event_handler from the listeners so that no more events
+        are dispatched to this handler."""
+        self._listeners.pop(event_handler, None)
+
+    def clear(self):
+        """Remove all listeners from the event dispatcher."""
+        self._listeners.clear()
+
     def dispatch(self, event):
         """Dispatch an event to the listeners.
 
@@ -58,3 +70,23 @@ class EventDispatcher(object):
         for event_handler, event_filter in self._listeners.items():
             if event_filter(event):
                 event_handler(event)
+
+    @classmethod
+    def get(cls, key=""):
+        """Factory method for creating global event dispatchers for loosely
+        coupling parts of a larger codebase.
+
+        Since global objects are a complete antipattern, we suggest that this
+        is only used to set a default value for an event dispatcher passed as
+        an argument.
+
+        Argument
+        --------
+            key: A key to uniquely identify a dispatcher or an instance of a
+                 dispatcher to be returned as is
+        """
+        if isinstance(key, cls):
+            return key
+        if key not in cls._dispatchers:
+            cls._dispatchers[key] = cls()
+        return cls._dispatchers[key]
