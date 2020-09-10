@@ -73,6 +73,22 @@ class _Callable(Spec):
         raise ValueError("{!r} is not a callable".format(x))
 
 
+class _EventDispatcherInstance(Spec):
+    def __init__(self):
+        super(_EventDispatcherInstance, self).__init__(
+            _EventDispatcherInstance._get_event_dispatcher,
+            "EventDispatcherInstance"
+        )
+
+    @staticmethod
+    def _get_event_dispatcher(x):
+        if isinstance(x, str):
+            return x
+        if isinstance(x, EventDispatcher):
+            return x
+        raise ValueError("{!r} is not an event dispatcher".format(x))
+
+
 class Optional(Spec):
     """Represent an optional parameter that can either have a value or it can
     be None.
@@ -107,7 +123,4 @@ Int = Spec(int, "Int")
 Float = Spec(float, "Float")
 Bool = Spec(bool, "Bool")
 Callable = _Callable()
-EventDispatcherInstance = Spec(
-    lambda x: isinstance(x, (str, EventDispatcher)),
-    "EventDispatcher"
-)
+EventDispatcherInstance = _EventDispatcherInstance()
