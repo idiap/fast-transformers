@@ -7,7 +7,7 @@
 
 import weakref
 
-from .events import Event
+from .event import Event
 
 
 class EventFilter(object):
@@ -98,8 +98,8 @@ class LayerNameEventFilter(EventFilter):
         }
         self._name_filter = name_filter
 
-    def __call__(self, layer):
-        name = self._names.get(layer, None)
+    def __call__(self, event):
+        name = self._names.get(weakref.ref(event.source), None)
         if name is None:
             return False
         return self._name_filter(name)
