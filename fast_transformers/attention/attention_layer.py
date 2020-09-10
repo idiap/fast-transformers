@@ -15,7 +15,7 @@ attention layer.
 
 from torch.nn import Linear, Module
 
-from ..events import EventDispatcher
+from ..events import EventDispatcher, QKVEvent
 
 
 class AttentionLayer(Module):
@@ -86,19 +86,24 @@ class AttentionLayer(Module):
         -------
             The new value for each query as a tensor of shape (N, L, D).
         """
-        # Project the queries/keys/values
-        queries = self.query_projection(queries)
-        keys = self.key_projection(keys)
-        values = self.value_projection(values)
-
-        # Reshape them into many heads and compute the attention
-        N, L, D = queries.shape
+        # Extract the dimensions into local variables
+        N, L, _ = queries.shape
         _, S, _ = keys.shape
         H = self.n_heads
+
+        # Project the queries/keys/values
+        queries = self.query_projection(queries).view(N, L, H, -1)
+        keys = self.key_projection(keys).view(N, S, H, -1)
+        values = self.value_projection(values).view(N, S, H, -1)
+
+        # Let the world know of the qkv
+        self.event_dispatcher.dispatch(QKVEvent(self, queries, keys, values))
+
+        # Compute the attention
         new_values = self.inner_attention(
-            queries.view(N, L, H, -1),
-            keys.view(N, S, H, -1),
-            values.view(N, S, H, -1),
+            queries,
+            keys,
+            values,
             attn_mask,
             query_lengths,
             key_lengths
