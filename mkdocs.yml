@@ -16,4 +16,5 @@ nav:
     - Builders: builders.md
     - Custom Attention Layer: custom_attention_layer.md
     - Recurrent Transformers: recurrent_transformers.md
+    - Events: events.md
     - API Docs: /api_docs/fast_transformers/
