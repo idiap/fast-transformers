@@ -15,6 +15,8 @@ None.
 
 from torch.nn import Linear, Module
 
+from ....events import EventDispatcher
+
 
 class RecurrentCrossAttentionLayer(Module):
     """See fast_transformers.attention.attention_layer.AttentionLayer .
@@ -33,9 +35,12 @@ class RecurrentCrossAttentionLayer(Module):
         d_keys: The dimensionality of the keys/queries
                 (default: d_model/n_heads)
         d_values: The dimensionality of the values (default: d_model/n_heads)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, attention, d_model, n_heads, d_keys=None,
-                 d_values=None):
+                 d_values=None, event_dispatcher=""):
         super(RecurrentCrossAttentionLayer, self).__init__()
 
         # Fill d_keys and d_values
@@ -48,6 +53,7 @@ class RecurrentCrossAttentionLayer(Module):
         self.value_projection = Linear(d_model, d_values * n_heads)
         self.out_projection = Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, keys, values, key_lengths, state=None):
         """Attend to the keys and values based on the passed in query.

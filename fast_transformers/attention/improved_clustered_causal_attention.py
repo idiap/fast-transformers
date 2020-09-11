@@ -13,7 +13,9 @@ import torch.autograd
 from torch.nn import Dropout, Module
 from torch.nn.init import normal_
 
-from ..attention_registry import AttentionRegistry, Optional, Float, Int, Bool
+from ..attention_registry import AttentionRegistry, Optional, Float, Int, \
+    Bool, EventDispatcherInstance
+from ..events import EventDispatcher
 from ..masking import FullMask
 from ..aggregate import aggregate, broadcast
 from ..clustering.hamming import cluster
@@ -90,10 +92,13 @@ class ImprovedClusteredCausalAttention(Module):
                       runtime)
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.1)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, clusters, iterations=10, bits=32,
                  hash_bias=True, topk=32, softmax_temp=None,
-                 attention_dropout=0.1):
+                 attention_dropout=0.1, event_dispatcher=""):
         super(ImprovedClusteredCausalAttention, self).__init__()
         self.clusters = clusters
         self.iterations = iterations
@@ -102,6 +107,7 @@ class ImprovedClusteredCausalAttention(Module):
         self.topk = topk
         self.softmax_temp = softmax_temp
         self.dropout = Dropout(attention_dropout)
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def _create_query_groups(self, Q, query_lengths):
         N, H, L, E = Q.shape
@@ -216,6 +222,7 @@ AttentionRegistry.register(
         ("hash_bias", Optional(Bool, True)),
         ("topk", Optional(Int, 32)),
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

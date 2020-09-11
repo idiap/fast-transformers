@@ -15,6 +15,8 @@ attention layer.
 
 from torch.nn import Linear, Module
 
+from ..events import EventDispatcher, QKVEvent
+
 
 class AttentionLayer(Module):
     """Implement the attention layer. Namely project the inputs to multi-head
@@ -34,9 +36,12 @@ class AttentionLayer(Module):
         d_keys: The dimensionality of the keys/queries
                 (default: d_model/n_heads)
         d_values: The dimensionality of the values (default: d_model/n_heads)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, attention, d_model, n_heads, d_keys=None,
-                 d_values=None):
+                 d_values=None, event_dispatcher=""):
         super(AttentionLayer, self).__init__()
 
         # Fill d_keys and d_values
@@ -49,6 +54,7 @@ class AttentionLayer(Module):
         self.value_projection = Linear(d_model, d_values * n_heads)
         self.out_projection = Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
@@ -80,19 +86,24 @@ class AttentionLayer(Module):
         -------
             The new value for each query as a tensor of shape (N, L, D).
         """
-        # Project the queries/keys/values
-        queries = self.query_projection(queries)
-        keys = self.key_projection(keys)
-        values = self.value_projection(values)
-
-        # Reshape them into many heads and compute the attention
-        N, L, D = queries.shape
+        # Extract the dimensions into local variables
+        N, L, _ = queries.shape
         _, S, _ = keys.shape
         H = self.n_heads
+
+        # Project the queries/keys/values
+        queries = self.query_projection(queries).view(N, L, H, -1)
+        keys = self.key_projection(keys).view(N, S, H, -1)
+        values = self.value_projection(values).view(N, S, H, -1)
+
+        # Let the world know of the qkv
+        self.event_dispatcher.dispatch(QKVEvent(self, queries, keys, values))
+
+        # Compute the attention
         new_values = self.inner_attention(
-            queries.view(N, L, H, -1),
-            keys.view(N, S, H, -1),
-            values.view(N, S, H, -1),
+            queries,
+            keys,
+            values,
             attn_mask,
             query_lengths,
             key_lengths

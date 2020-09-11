@@ -13,7 +13,9 @@ from math import sqrt
 import torch
 from torch.nn import Dropout, Module
 
-from ..attention_registry import AttentionRegistry, Optional, Int, Float
+from ..attention_registry import AttentionRegistry, Optional, Int, Float, \
+    EventDispatcherInstance
+from ..events import EventDispatcher
 
 
 class ExactTopKAttention(Module):
@@ -27,12 +29,17 @@ class ExactTopKAttention(Module):
                       runtime)
         attention_dropout: The dropout rate to apply to the attention
                            (default: 0.1)
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
-    def __init__(self, topk=32, softmax_temp=None, attention_dropout=0.1):
+    def __init__(self, topk=32, softmax_temp=None, attention_dropout=0.1,
+                 event_dispatcher=""):
         super(ExactTopKAttention, self).__init__()
         self.topk = topk
         self.softmax_temp = softmax_temp
         self.dropout = Dropout(attention_dropout)
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
@@ -75,6 +82,7 @@ AttentionRegistry.register(
     [
         ("topk", Optional(Int, 32)),
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )

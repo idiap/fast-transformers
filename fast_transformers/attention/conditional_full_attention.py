@@ -10,7 +10,9 @@ attention depending on the input sequence length."""
 import torch
 from torch.nn import Module
 
-from ..attention_registry import AttentionRegistry, Optional, Int, Float
+from ..attention_registry import AttentionRegistry, Optional, Int, Float, \
+    EventDispatcherInstance
+from ..events import EventDispatcher
 from .full_attention import FullAttention
 
 
@@ -25,13 +27,17 @@ class ConditionalFullAttention(Module):
                       consider.
         softmax_temp: See fast_transformers.attention.full_attention.
         attention_dropout: See fast_transformers.attention.full_attention.
+        event_dispatcher: str or EventDispatcher instance to be used by this
+                          module for dispatching events (default: the default
+                          global dispatcher)
     """
     def __init__(self, other_attention, length_limit=512, softmax_temp=None,
-                 attention_dropout=0.1):
+                 attention_dropout=0.1, event_dispatcher=""):
         super(ConditionalFullAttention, self).__init__()
         self.full_attention = FullAttention(softmax_temp, attention_dropout)
         self.other_attention = other_attention
         self.length_limit = length_limit
+        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
@@ -54,6 +60,7 @@ AttentionRegistry.register(
     [
         ("length_limit", Optional(Int, 512)),
         ("softmax_temp", Optional(Float)),
-        ("attention_dropout", Optional(Float, 0.1))
+        ("attention_dropout", Optional(Float, 0.1)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
 )
