@@ -94,6 +94,13 @@ def get_extensions():
                 "fast_transformers/causal_product/causal_product_cpu.cpp"
             ],
             extra_compile_args=["-fopenmp", "-ffast-math"]
+        ),
+        CppExtension(
+            "fast_transformers.local_product.local_product_cpu",
+            sources=[
+                "fast_transformers/local_product/local_product_cpu.cpp"
+            ],
+            extra_compile_args=["-fopenmp", "-ffast-math"]
         )
     ]
     if cuda_toolkit_available():
