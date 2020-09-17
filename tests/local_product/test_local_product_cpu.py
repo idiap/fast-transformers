@@ -43,9 +43,12 @@ class TestLocalProductCPU(unittest.TestCase):
             QK = torch.full((N, H, L, local_context), float("-inf"),
                             dtype=torch.float32)
             for i in range(L):
-                start = max(0, i-local_context//2)
-                end = min(L, start+local_context)
-                QK[:, :, i, :(end-start)] = torch.einsum(
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
+                QK[:, :, i, kstart:kstart+(end-start)] = torch.einsum(
                     "nhe,nhle->nhl",
                     Q[:, :, i],
                     K[:, :, start:end]
@@ -77,9 +80,12 @@ class TestLocalProductCPU(unittest.TestCase):
             QK = torch.full((N, H, L, local_context), float("-inf"),
                             dtype=torch.float32)
             for i in range(L):
-                start = max(0, i-local_context//2)
-                end = min(L, start+local_context)
-                QK[:, :, i, :(end-start)] = torch.einsum(
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
+                QK[:, :, i, kstart:kstart+(end-start)] = torch.einsum(
                     "nhe,nhle->nhl",
                     Q[:, :, i],
                     K[:, :, start:end]
@@ -138,11 +144,14 @@ class TestLocalProductCPU(unittest.TestCase):
 
             out = torch.zeros(N, H, L, E)
             for i in range(L):
-                start = max(0, i-local_context//2)
-                end = min(L, start+local_context)
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
                 out[:, :, i] = torch.einsum(
                     "nhl,nhle->nhe",
-                    A[:, :, i, :end-start],
+                    A[:, :, i, kstart:kstart+end-start],
                     V[:, :, start:end]
                 )
 
@@ -169,11 +178,14 @@ class TestLocalProductCPU(unittest.TestCase):
             V = V.requires_grad_(True)
             out = torch.zeros(N, H, L, E)
             for i in range(L):
-                start = max(0, i-local_context//2)
-                end = min(L, start+local_context)
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
                 out[:, :, i] = torch.einsum(
                     "nhl,nhle->nhe",
-                    A[:, :, i, :end-start],
+                    A[:, :, i, kstart:kstart+end-start],
                     V[:, :, start:end]
                 )
             out.sum().backward()
@@ -189,4 +201,3 @@ class TestLocalProductCPU(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

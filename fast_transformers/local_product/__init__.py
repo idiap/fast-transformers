@@ -10,14 +10,28 @@ from .local_product_cpu import local_dot_product as local_dot_product_cpu, \
     local_weighted_average as local_weighted_average_cpu, \
     local_weighted_average_backward as local_weighted_average_backward_cpu
 
+try:
+    from .local_product_cuda import \
+        local_dot_product as local_dot_product_cuda, \
+        local_weighted_average as local_weighted_average_cuda
+        #local_dot_backward as local_dot_backward_cuda
+        #local_weighted_average_backward as local_weighted_average_backward_cuda
+except ImportError:
+    local_dot_product_cuda = None
+    local_dot_backward_cuda = None
+    local_weighted_average_cuda = None
+    local_weighted_average_backward_cuda = None
+
 
 class LocalDotProduct(torch.autograd.Function):
     """TODO"""
     dot = {
-        "cpu": local_dot_product_cpu
+        "cpu": local_dot_product_cpu,
+        "cuda": local_dot_product_cuda
     }
     dot_backward = {
-        "cpu": local_dot_backward_cpu
+        "cpu": local_dot_backward_cpu,
+        #"cuda": local_dot_backward_cuda
     }
 
     @staticmethod
@@ -54,10 +68,12 @@ class LocalDotProduct(torch.autograd.Function):
 class LocalWeightedAverage(torch.autograd.Function):
     """TODO"""
     avg = {
-        "cpu": local_weighted_average_cpu
+        "cpu": local_weighted_average_cpu,
+        "cuda": local_weighted_average_cuda
     }
     avg_backward = {
-        "cpu": local_weighted_average_backward_cpu
+        "cpu": local_weighted_average_backward_cpu,
+        #"cuda": local_weighted_average_backward_cuda
     }
 
     @staticmethod

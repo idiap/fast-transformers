@@ -154,6 +154,13 @@ def get_extensions():
                     "fast_transformers/causal_product/causal_product_cuda.cu"
                 ],
                 extra_compile_args=["-arch=compute_50"]
+            ),
+            CUDAExtension(
+                "fast_transformers.local_product.local_product_cuda",
+                sources=[
+                    "fast_transformers/local_product/local_product_cuda.cu"
+                ],
+                extra_compile_args=["-arch=compute_50"]
             )
         ]
     return extensions

@@ -58,8 +58,9 @@ torch::Tensor local_dot_product(
             int n_keys = kla[n];
             for (int l=0; l<L; l++) {
                 int start = std::max(0, l-local_context/2);
-                int end = std::min(n_keys, start+local_context);
-                for (int s=start,k=0; s<end; k++, s++) {
+                int end = std::min(n_keys, l+(local_context+1)/2);
+                int kstart = local_context/2 - std::abs(l-start);
+                for (int s=start,k=kstart; s<end; k++, s++) {
                     oa[n][h][l][k] = dot(
                         &qa[n][h][l][0],
                         &ka[n][h][s][0],
@@ -106,8 +107,9 @@ std::tuple<torch::Tensor, torch::Tensor> local_dot_backward(
             int n_keys = kla[n];
             for (int l=0; l<L; l++) {
                 int start = std::max(0, l-local_context/2);
-                int end = std::min(n_keys, start+local_context);
-                for (int s=start,k=0; s<end; k++, s++) {
+                int end = std::min(n_keys, l+(local_context+1)/2);
+                int kstart = local_context/2 - std::abs(l-start);
+                for (int s=start,k=kstart; s<end; k++, s++) {
                     scaled_copy_add(
                         &ka[n][h][s][0],
                         &gqa[n][h][l][0],
@@ -154,8 +156,9 @@ torch::Tensor local_weighted_average(
         for (int h=0; h<H; h++) {
             for (int l=0; l<L; l++) {
                 int start = std::max(0, l-local_context/2);
-                int end = std::min(S, start+local_context);
-                for (int s=start,k=0; s<end; k++, s++) {
+                int end = std::min(S, l+(local_context+1)/2);
+                int kstart = local_context/2 - std::abs(l-start);
+                for (int s=start,k=kstart; s<end; k++, s++) {
                     scaled_copy_add(
                         &va[n][h][s][0],
                         &oa[n][h][l][0],
@@ -195,19 +198,14 @@ std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
     auto gaa = grad_attention.accessor<float, 4>();
     auto gva = grad_values.accessor<float, 4>();
 
-    // V'_ie = A_ij V_je
-    // GV_kl = GV'_il DV'_ie/DV_kl
-    //       = GV'_il A_ik
-    // GA_kl = GV'_ke DV'_ke/DA_kl
-    //       = GV'_ke V_le
-
     #pragma omp parallel for collapse(2)
     for (int n=0; n<N; n++) {
         for (int h=0; h<H; h++) {
             for (int l=0; l<L; l++) {
                 int start = std::max(0, l-local_context/2);
-                int end = std::min(S, start+local_context);
-                for (int s=start,k=0; s<end; k++, s++) {
+                int end = std::min(S, l+(local_context+1)/2);
+                int kstart = local_context/2 - std::abs(l-start);
+                for (int s=start,k=kstart; s<end; k++, s++) {
                     scaled_copy_add(
                         &ga[n][h][l][0],
                         &gva[n][h][s][0],
