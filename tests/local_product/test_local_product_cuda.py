@@ -141,31 +141,32 @@ class TestLocalProductCUDA(unittest.TestCase):
                 self._test_benchmark_forward(k)
 
     def _test_result_weighted_average(self, CP):
-        #N = 1
-        #L = 10
-        #H = 1
-        #E = 32
-        #local_context = 8
-        #A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
-        #V = torch.rand(N, H, L, E).cuda()
-        #out_hat = self.kernels[CP]["wa"](A, V)
+        N = 1
+        L = 128
+        H = 1
+        E = 55
+        local_context = 33
+        A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
+        V = torch.rand(N, H, L, E).cuda()
+        out_hat = self.kernels[CP]["wa"](A, V)
 
-        #out = torch.zeros(N, H, L, E).cuda()
-        #for i in range(L):
-        #    start = i - local_context//2
-        #    end = start + local_context
-        #    start = max(0, start)
-        #    end = min(L, end)
-        #    kstart = local_context//2 - abs(i-start)
-        #    out[:, :, i] = torch.einsum(
-        #        "nhl,nhle->nhe",
-        #        A[:, :, i, kstart:kstart+end-start],
-        #        V[:, :, start:end]
-        #    )
-        #diff = out_hat - out
+        out = torch.zeros(N, H, L, E).cuda()
+        for i in range(L):
+            start = i - local_context//2
+            end = start + local_context
+            start = max(0, start)
+            end = min(L, end)
+            kstart = local_context//2 - abs(i-start)
+            out[:, :, i] = torch.einsum(
+                "nhl,nhle->nhe",
+                A[:, :, i, kstart:kstart+end-start],
+                V[:, :, start:end]
+            )
+        diff = out_hat - out
+        print(V[0, 0])
 
-        #self.assertTrue(torch.allclose(out, out_hat, atol=1e-5, rtol=1e-5))
-        #return
+        self.assertTrue(torch.allclose(out, out_hat, atol=1e-5, rtol=1e-5))
+        return
 
         for t in range(10):
             N = 10
@@ -199,7 +200,7 @@ class TestLocalProductCUDA(unittest.TestCase):
 
     def _test_benchmark_weighted_average(self, CP):
         N = 10
-        L = 2048
+        L = 4096
         H = 12
         E = 64
         Q = torch.rand(N, H, L, E).cuda()

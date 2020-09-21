@@ -52,43 +52,6 @@ __global__ void copy_masked(
 }
 
 
-__global__ void local_copy_scaled(
-    float4_accessor factors,
-    float4_accessor values,
-    float4_accessor output
-) {
-    int idx = blockIdx.x*blockDim.x + threadIdx.x;
-    int E = values.size(3);
-    int n = idx / factors.stride(0) / E;
-    idx = idx - n*factors.stride(0)*E;
-    int h = idx / factors.stride(1) / E;
-    idx = idx - h*factors.stride(1)*E;
-    int l = idx / factors.stride(2) / E;
-    idx = idx - l*factors.stride(2)*E;
-    int k = idx / E;
-    idx = idx - k*E;
-    int e = idx;
-
-    if (n >= values.size(0)) {
-        return;
-    }
-    int local_context = factors.size(3);
-    if (k < 0 || k >= local_context) {
-        return;
-    }
-
-    int s = k + l - local_context/2;
-    if (s < 0 || s >= values.size(2)) {
-        return;
-    }
-
-    atomicAdd(
-        &output[n][h][l][e],
-        factors[n][h][l][k] * values[n][h][s][e]
-    );
-}
-
-
 torch::Tensor local_dot_product(
     const torch::Tensor queries,
     const torch::Tensor keys,
@@ -141,20 +104,103 @@ torch::Tensor local_dot_product(
 }
 
 
+template <int LB=32, int KB=32, int EB=32>
+__global__ void local_copy_scaled(
+    float4_accessor factors,
+    float4_accessor values,
+    float4_accessor output,
+    dim3 strides
+) {
+    int idx = blockIdx.x;
+    int n = idx / strides.x;
+    idx -= n*strides.x;
+    int h = idx / strides.y;
+    idx -= h*strides.y;
+    int lblock = idx / strides.z;
+    idx -= lblock*strides.z;
+    int eblock = idx;
+
+    int local_context = factors.size(3);
+
+    int l_local = threadIdx.x / EB;
+    int e_local = threadIdx.x - l_local*EB;
+    int l = lblock * LB + l_local;
+    int e = eblock * EB + e_local;
+
+    if (n > factors.size(0)) {
+        return;
+    }
+
+    extern __shared__ float shared_mem[];
+    float * s_factors = shared_mem;
+    float * s_values = s_factors + LB*KB;
+
+    for (int k=0; k<local_context; k+=KB) {
+        // Load the data in shared mem
+        int s1 = l - local_context/2 + k;
+        int s2 = s1 + LB;
+        int scurrent = s1 + e_local;
+        if (l < factors.size(2) && k + e_local < local_context && scurrent >= 0 && scurrent < values.size(2)) {
+            s_factors[l_local*KB + e_local] = factors[n][h][l][k + e_local];
+        } else {
+            s_factors[l_local*KB + e_local] = 0;
+        }
+        if (e < values.size(3) && s1 >=0 && s1 < values.size(2)) {
+            s_values[l_local*EB + e_local] = values[n][h][s1][e];
+        } else {
+            s_values[l_local*EB + e_local] = 0;
+        }
+        if (e < values.size(3) && s2 >=0 && s2 < values.size(2)) {
+            s_values[(l_local+LB)*EB + e_local] = values[n][h][s2][e];
+        } else {
+            s_values[(l_local+LB)*EB + e_local] = 0;
+        }
+        __syncthreads();
+
+        // Do the dot product
+        float result = 0;
+        #pragma unroll
+        for (int k_local=0; k_local<KB; k_local++) {
+            result += s_factors[l_local*KB + k_local] * s_values[(k_local + l_local)*EB + e_local];
+        }
+        if (l < factors.size(2) && e < values.size(3)) {
+            output[n][h][l][e] += result;
+        }
+        __syncthreads();
+    }
+}
+
+
 torch::Tensor local_weighted_average(
     const torch::Tensor attention,
     const torch::Tensor values
 ) {
+    // Extract some shapes
+    int N = attention.size(0);
+    int H = attention.size(1);
+    int L = attention.size(2);
+    int K = attention.size(3);
+    int E = values.size(3);
+
     // Allocate space for the output
     auto output = torch::zeros_like(values);
 
-    const int threads = 1024;
-    int blocks = ceildiv(attention.numel()*values.size(3), threads);
+    const int threads = 32*32;
+    int lblocks = ceildiv(L, 32);
+    int eblocks = ceildiv(E, 32);
+    int blocks = N * H * lblocks * eblocks;
+    int shared_mem = 32*32 * 3 * sizeof(float);
+    dim3 strides(
+        H*lblocks*eblocks,
+        lblocks*eblocks,
+        eblocks
+    );
 
-    local_copy_scaled<<<blocks, threads>>>(
+    local_copy_scaled<<<blocks, threads, shared_mem>>>(
         attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        output.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
+        output.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        strides
     );
 
     return output;
