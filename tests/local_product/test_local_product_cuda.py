@@ -12,13 +12,14 @@ import numpy as np
 import torch
 
 from fast_transformers.local_product.local_product_cuda import \
-    local_dot_product, local_weighted_average
+    local_dot_product, local_dot_backward, local_weighted_average
 
 
 class TestLocalProductCUDA(unittest.TestCase):
     kernels = {
         "normal": {
             "dot": local_dot_product,
+            "dot_backward": local_dot_backward,
             "wa": local_weighted_average
         },
         # map the optimized versions to other keys here
@@ -30,37 +31,6 @@ class TestLocalProductCUDA(unittest.TestCase):
             raise unittest.SkipTest("No CUDA available")
 
     def _test_result_forward(self, CP):
-        # N = 1
-        # L = 10
-        # H = 1
-        # E = 32
-        # Q = torch.rand(N, H, L, E).cuda()
-        # K = torch.rand(N, H, L, E).cuda()
-        # local_context = 8
-        # mask = torch.zeros(L, L).cuda()
-        # lengths = torch.full((N,), L, dtype=torch.long).cuda()
-        # out = self.kernels[CP]["dot"](Q, K, mask, lengths, local_context)
-
-        # QK = torch.full((N, H, L, local_context), float("-inf"),
-        #                 dtype=torch.float32).cuda()
-        # for i in range(L):
-        #     start = i - local_context//2
-        #     end = start + local_context
-        #     start = max(0, start)
-        #     end = min(L, end)
-        #     kstart = local_context//2 - abs(i-start)
-        #     QK[:, :, i, kstart:kstart+(end-start)] = torch.einsum(
-        #         "nhe,nhle->nhl",
-        #         Q[:, :, i],
-        #         K[:, :, start:end]
-        #     )
-        # diff = torch.abs(out-QK)
-        # print(out[0, 0])
-
-        # self.assertTrue(torch.allclose(QK, out, atol=1e-5, rtol=1e-5))
-
-        # return
-
         for t in range(10):
             N = 10
             L = 100
@@ -93,6 +63,45 @@ class TestLocalProductCUDA(unittest.TestCase):
         for k in self.kernels.keys():
             with self.subTest(msg=k):
                 self._test_result_forward(k)
+
+    def _test_result_backward(self, CP):
+        for t in range(10):
+            N = 10
+            L = 100
+            H = 10
+            E = np.random.randint(10, 256)
+            Q = torch.rand(N, H, L, E).cuda()
+            K = torch.rand(N, H, L, E).cuda()
+            local_context = np.random.randint(8, 24)
+            lengths = torch.full((N,), L, dtype=torch.long).cuda()
+            grad_in = torch.ones(N, H, L, local_context).cuda()
+            GQ, GK = self.kernels[CP]["dot_backward"](Q, K, lengths, grad_in,
+                                                        local_context)
+
+            Q = Q.requires_grad_(True)
+            K = K.requires_grad_(True)
+            QK = torch.full((N, H, L, local_context), float("-inf"),
+                            dtype=torch.float32)
+            for i in range(L):
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
+                QK[:, :, i, kstart:kstart+(end-start)] = torch.einsum(
+                    "nhe,nhle->nhl",
+                    Q[:, :, i],
+                    K[:, :, start:end]
+                )
+            QK.sum().backward()
+
+            self.assertTrue(torch.allclose(Q.grad, GQ, atol=1e-5, rtol=1e-5))
+            self.assertTrue(torch.allclose(K.grad, GK, atol=1e-5, rtol=1e-5))
+
+    def test_result_backward(self):
+        for k in self.kernels.keys():
+            with self.subTest(msg=k):
+                self._test_result_backward(k)
 
     def _test_benchmark_forward(self, CP):
         N = 10
@@ -141,33 +150,6 @@ class TestLocalProductCUDA(unittest.TestCase):
                 self._test_benchmark_forward(k)
 
     def _test_result_weighted_average(self, CP):
-        N = 1
-        L = 128
-        H = 1
-        E = 55
-        local_context = 33
-        A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
-        V = torch.rand(N, H, L, E).cuda()
-        out_hat = self.kernels[CP]["wa"](A, V)
-
-        out = torch.zeros(N, H, L, E).cuda()
-        for i in range(L):
-            start = i - local_context//2
-            end = start + local_context
-            start = max(0, start)
-            end = min(L, end)
-            kstart = local_context//2 - abs(i-start)
-            out[:, :, i] = torch.einsum(
-                "nhl,nhle->nhe",
-                A[:, :, i, kstart:kstart+end-start],
-                V[:, :, start:end]
-            )
-        diff = out_hat - out
-        print(V[0, 0])
-
-        self.assertTrue(torch.allclose(out, out_hat, atol=1e-5, rtol=1e-5))
-        return
-
         for t in range(10):
             N = 10
             L = 100
