@@ -175,9 +175,9 @@ torch::Tensor local_weighted_average(
 
 
 std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
-    torch::Tensor attention,
-    torch::Tensor values,
-    torch::Tensor grad
+    const torch::Tensor attention,
+    const torch::Tensor values,
+    const torch::Tensor grad
 ) {
     // Extract some shapes
     int N = attention.size(0);

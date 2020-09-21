@@ -119,12 +119,29 @@ __global__ void local_copy_scaled(
 }
 
 
-template <int LB=32, int KB=32, int EB=32>
+struct IncreasingLK
+{
+    inline __device__
+    int operator()(int k, int e_local, int local_context) {
+        return k+e_local;
+    }
+};
+struct ReverseLK
+{
+    inline __device__
+    int operator()(int k, int e_local, int local_context) {
+        return local_context-k-e_local-1;
+    }
+};
+
+
+template <typename lk_policy_type, int LB=32, int KB=32, int EB=32>
 __global__ void local_copy_scaled_transpose(
     float4_accessor factors,
     float4_accessor values,
     float4_accessor output,
-    dim3 strides
+    dim3 strides,
+    lk_policy_type lk_policy
 ) {
     int idx = blockIdx.x;
     int n = idx / strides.x;
@@ -170,7 +187,8 @@ __global__ void local_copy_scaled_transpose(
         int lcurrent = l+e_local;
         int kcurrent = k+e_local;
         if (lcurrent >= 0 && lcurrent < factors.size(2) && kcurrent < local_context) {
-            s_factors[s_local*KB + e_local] = factors[n][h][l+e_local][k+e_local];
+            int t = lk_policy(k, e_local, local_context);
+            s_factors[s_local*KB + e_local] = factors[n][h][l+e_local][t];
         } else {
             s_factors[s_local*KB + e_local] = 0;
         }
@@ -282,7 +300,8 @@ std::tuple<torch::Tensor, torch::Tensor> local_dot_backward(
         grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        strides
+        strides,
+        IncreasingLK()
     );
 
     return std::make_tuple(grad_queries, grad_keys);
@@ -325,6 +344,46 @@ torch::Tensor local_weighted_average(
 }
 
 
+std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
+    const torch::Tensor attention,
+    const torch::Tensor values,
+    const torch::Tensor grad
+) {
+    // Extract some shapes
+    int N = attention.size(0);
+    int H = attention.size(1);
+    int L = attention.size(2);
+    int local_context = attention.size(3);
+    int S = values.size(2);
+    int E = values.size(3);
+
+    // Allocate space for the output
+    auto grad_attention = torch::zeros_like(attention);
+    auto grad_values = torch::zeros_like(values);
+
+    const int threads = 32*32;
+    int lblocks = ceildiv(L, 32);
+    int eblocks = ceildiv(E, 32);
+    int blocks = N * H * lblocks * eblocks;
+    int shared_mem = 32*32 * 3 * sizeof(float);
+    dim3 strides(
+        H*lblocks*eblocks,
+        lblocks*eblocks,
+        eblocks
+    );
+
+    local_copy_scaled_transpose<<<blocks, threads, shared_mem>>>(
+        attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        strides,
+        ReverseLK()
+    );
+
+    return std::make_tuple(grad_attention, grad_values);
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def(
         "local_dot_product",
@@ -340,5 +399,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "local_weighted_average",
         &local_weighted_average,
         "Perform the weighted average of V for a small context around each Q"
+    );
+    m.def(
+        "local_weighted_average_backward",
+        &local_weighted_average_backward,
+        "Compute the gradient of the local weighted average"
     );
 }

@@ -11,8 +11,15 @@ import unittest
 import numpy as np
 import torch
 
-from fast_transformers.local_product.local_product_cuda import \
-    local_dot_product, local_dot_backward, local_weighted_average
+try:
+    from fast_transformers.local_product.local_product_cuda import \
+        local_dot_product, local_dot_backward, \
+        local_weighted_average, local_weighted_average_backward
+except ImportError:
+    local_dot_product = None
+    local_dot_backward = None
+    local_weighted_average = None
+    local_weighted_average_backward = None
 
 
 class TestLocalProductCUDA(unittest.TestCase):
@@ -20,7 +27,8 @@ class TestLocalProductCUDA(unittest.TestCase):
         "normal": {
             "dot": local_dot_product,
             "dot_backward": local_dot_backward,
-            "wa": local_weighted_average
+            "wa": local_weighted_average,
+            "wa_backward": local_weighted_average_backward
         },
         # map the optimized versions to other keys here
     }
@@ -213,6 +221,80 @@ class TestLocalProductCUDA(unittest.TestCase):
         for k in self.kernels.keys():
             with self.subTest(msg=k):
                 self._test_benchmark_weighted_average(k)
+
+    def _test_result_weighted_average_backward(self, CP):
+        N = 1
+        L = 12
+        H = 1
+        E = 1
+        local_context = 8
+        A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
+        V = torch.rand(N, H, L, E).cuda()
+        grad_in = torch.ones(N, H, L, E).cuda()
+        GA, GV = self.kernels[CP]["wa_backward"](A, V, grad_in)
+
+        A = A.requires_grad_(True)
+        V = V.requires_grad_(True)
+        out = torch.zeros(N, H, L, E).cuda()
+        for i in range(L):
+            start = i - local_context//2
+            end = start + local_context
+            start = max(0, start)
+            end = min(L, end)
+            kstart = local_context//2 - abs(i-start)
+            out[:, :, i] = torch.einsum(
+                "nhl,nhle->nhe",
+                A[:, :, i, kstart:kstart+end-start],
+                V[:, :, start:end]
+            )
+            if start == 0:
+                print(i, kstart)
+        out.sum().backward()
+
+        print(A[0, 0])
+        print(A[0, 0].cpu()[torch.arange(5), 4-torch.arange(5)].sum())
+        print(A[0, 0].cpu()[torch.arange(5), torch.arange(5)+3].sum())
+        print(GV)
+        print(V.grad)
+
+        self.assertTrue(torch.allclose(V.grad, GV, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(A.grad, GA, atol=1e-5, rtol=1e-5))
+        return
+
+        for t in range(10):
+            N = 10
+            L = 100
+            H = 10
+            E = np.random.randint(10, 256)
+            local_context = np.random.randint(8, 24)
+            A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
+            V = torch.rand(N, H, L, E).cuda()
+            grad_in = torch.ones(N, H, L, E).cuda()
+            GA, GV = self.kernels[CP]["wa_backward"](A, V, grad_in)
+
+            A = A.requires_grad_(True)
+            V = V.requires_grad_(True)
+            out = torch.zeros(N, H, L, E).cuda()
+            for i in range(L):
+                start = i - local_context//2
+                end = start + local_context
+                start = max(0, start)
+                end = min(L, end)
+                kstart = local_context//2 - abs(i-start)
+                out[:, :, i] = torch.einsum(
+                    "nhl,nhle->nhe",
+                    A[:, :, i, kstart:kstart+end-start],
+                    V[:, :, start:end]
+                )
+            out.sum().backward()
+
+            self.assertTrue(torch.allclose(A.grad, GA, atol=1e-5, rtol=1e-5))
+            self.assertTrue(torch.allclose(V.grad, GV, atol=1e-5, rtol=1e-5))
+
+    def test_result_weighted_average_backward(self):
+        for k in self.kernels.keys():
+            with self.subTest(msg=k):
+                self._test_result_weighted_average_backward(k)
 
 
 if __name__ == "__main__":
