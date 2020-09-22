@@ -18,6 +18,84 @@ inline int ceildiv(int a, int b) {
 }
 
 
+template <int LB=32, int KB=32, int EB=32>
+__global__ void sliding_dot(
+    float4_accessor queries,
+    float4_accessor keys,
+    float4_accessor output,
+    dim3 strides
+) {
+    int idx = blockIdx.x;
+    int n = idx / strides.x;
+    idx -= n*strides.x;
+    int h = idx / strides.y;
+    idx -= h*strides.y;
+    int lblock = idx / strides.z;
+    idx -= lblock*strides.z;
+    int kblock = idx;
+
+    int E = keys.size(3);
+    int local_context = output.size(3);
+
+    int l_local = threadIdx.x / EB;
+    int k_local = threadIdx.x - l_local*EB;
+    int l = lblock * LB + l_local;
+    int k = kblock * KB + k_local;
+    int s = l - local_context/2 + k;
+    int s2 = s + LB;
+
+    extern __shared__ float shared_mem[];
+    float * s_queries = shared_mem;
+    float * s_keys = s_queries + LB*EB;
+
+    if (n > queries.size(0)) {
+        return;
+    }
+
+    for (int e=0; e<E; e+=EB) {
+        // Load the queries and keys
+        if (e + k_local < E) {
+            if (l < queries.size(2)) {
+                s_queries[l_local*EB + k_local] = queries[n][h][l][e+k_local];
+            } else {
+                s_queries[l_local*EB + k_local] = 0;
+            }
+            {
+                int s = lblock * LB + l_local - local_context/2 + kblock * KB;
+                if (s >= 0 && s < keys.size(2)) {
+                    s_keys[l_local*EB + k_local] = keys[n][h][s][e+k_local];
+                } else {
+                    s_keys[l_local*EB + k_local] = 0;
+                }
+                int s2 = s + LB;
+                if (s2 >= 0 && s2 < keys.size(2)) {
+                    s_keys[(l_local + LB)*EB + k_local] = keys[n][h][s2][e+k_local];
+                } else {
+                    s_keys[(l_local + LB)*EB + k_local] = 0;
+                }
+            }
+        } else {
+            s_queries[l_local*EB + k_local] = 0;
+            s_keys[l_local*EB + k_local] = 0;
+            s_keys[(l_local + LB)*EB + k_local] = 0;
+        }
+        __syncthreads();
+        
+        // Produce the nhlk output
+        float result = 0;
+        #pragma unroll
+        for (int e_local=0; e_local<EB; e_local++) {
+            result += s_queries[l_local*EB + e_local] * s_keys[(l_local+k_local)*EB + e_local];
+        }
+        __syncthreads();
+
+        if (l < queries.size(2) && k < local_context) {
+            output[n][h][l][k] += result;
+        }
+    }
+}
+
+
 __global__ void copy_masked(
     float4_accessor buffer,
     float2_accessor attn_mask,
@@ -223,13 +301,12 @@ torch::Tensor local_dot_product(
     int S = keys.size(2);
     int E = queries.size(3);
 
-    const int blocks = 64;
-
     // Allocate space for the output
     auto output = queries.new_full(
         {N, H, L, local_context},
         -std::numeric_limits<float>::infinity()
     );
+    const int blocks = 64;
     auto buffer = queries.new_zeros({N, H, blocks, blocks+local_context});
 
     const int threads = 1024;
@@ -361,24 +438,48 @@ std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
     auto grad_attention = torch::zeros_like(attention);
     auto grad_values = torch::zeros_like(values);
 
-    const int threads = 32*32;
-    int lblocks = ceildiv(L, 32);
-    int eblocks = ceildiv(E, 32);
-    int blocks = N * H * lblocks * eblocks;
-    int shared_mem = 32*32 * 3 * sizeof(float);
-    dim3 strides(
-        H*lblocks*eblocks,
-        lblocks*eblocks,
-        eblocks
-    );
+    // Compute the gradient wrt to the values
+    {
+        const int threads = 32*32;
+        int lblocks = ceildiv(L, 32);
+        int eblocks = ceildiv(E, 32);
+        int blocks = N * H * lblocks * eblocks;
+        int shared_mem = 32*32 * 3 * sizeof(float);
+        dim3 strides(
+            H*lblocks*eblocks,
+            lblocks*eblocks,
+            eblocks
+        );
 
-    local_copy_scaled_transpose<<<blocks, threads, shared_mem>>>(
-        attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        strides,
-        ReverseLK()
-    );
+        local_copy_scaled_transpose<<<blocks, threads, shared_mem>>>(
+            attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            strides,
+            ReverseLK()
+        );
+    }
+
+    // Compute the gradient wrt to the attention
+    {
+        const int threads = 32*32;
+        int lblocks = ceildiv(L, 32);
+        int kblocks = ceildiv(local_context, 32);
+        int blocks = N * H * lblocks * kblocks;
+        int shared_mem = 32*32 * 3 * sizeof(float);
+        dim3 strides(
+            H*lblocks*kblocks,
+            lblocks*kblocks,
+            kblocks
+        );
+
+        sliding_dot<<<blocks, threads, shared_mem>>>(
+            grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            strides
+        );
+    }
 
     return std::make_tuple(grad_attention, grad_values);
 }

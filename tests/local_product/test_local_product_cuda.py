@@ -224,10 +224,10 @@ class TestLocalProductCUDA(unittest.TestCase):
 
     def _test_result_weighted_average_backward(self, CP):
         N = 1
-        L = 12
+        L = 64
         H = 1
-        E = 1
-        local_context = 8
+        E = 16
+        local_context = 33
         A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
         V = torch.rand(N, H, L, E).cuda()
         grad_in = torch.ones(N, H, L, E).cuda()
@@ -247,18 +247,10 @@ class TestLocalProductCUDA(unittest.TestCase):
                 A[:, :, i, kstart:kstart+end-start],
                 V[:, :, start:end]
             )
-            if start == 0:
-                print(i, kstart)
         out.sum().backward()
 
-        print(A[0, 0])
-        print(A[0, 0].cpu()[torch.arange(5), 4-torch.arange(5)].sum())
-        print(A[0, 0].cpu()[torch.arange(5), torch.arange(5)+3].sum())
-        print(GV)
-        print(V.grad)
-
-        self.assertTrue(torch.allclose(V.grad, GV, atol=1e-5, rtol=1e-5))
         self.assertTrue(torch.allclose(A.grad, GA, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(V.grad, GV, atol=1e-5, rtol=1e-5))
         return
 
         for t in range(10):
