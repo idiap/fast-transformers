@@ -223,7 +223,6 @@ class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
                         event_dispatcher=self.event_dispatcher
                     ),
                     model_dimensions,
-                    self.n_heads,  # Should be removed (see #7)
                     self.feed_forward_dimensions,
                     self.dropout,
                     self.activation,

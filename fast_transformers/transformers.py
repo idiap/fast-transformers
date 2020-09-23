@@ -29,7 +29,6 @@ class TransformerEncoderLayer(Module):
     ---------
         attention: The attention implementation to use given as a nn.Module
         d_model: The input feature dimensionality
-        n_heads: The number of heads for the multi head attention
         d_ff: The dimensionality of the intermediate features after the
               attention (default: d_model*4)
         dropout: The dropout rate to apply to the intermediate features
@@ -40,7 +39,7 @@ class TransformerEncoderLayer(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, attention, d_model, n_heads, d_ff=None, dropout=0.1,
+    def __init__(self, attention, d_model, d_ff=None, dropout=0.1,
                  activation="relu", event_dispatcher=""):
         super(TransformerEncoderLayer, self).__init__()
         d_ff = d_ff or 4*d_model
