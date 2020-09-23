@@ -193,12 +193,19 @@ class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
         if key[0] == "_":
             return super().__setattr__(key, val)
 
-        # Existing attributes are settable
+        # Existing attributes are settable but they might also be attention
+        # parameters so try that as well
+        fail_on_exception = True
         if hasattr(self, key):
-            return super().__setattr__(key, val)
+            super().__setattr__(key, val)
+            fail_on_exception = False
 
         # Non-existing "public" attributes may be attention parameters
-        setattr(self._attention_builder, key, val)
+        try:
+            setattr(self._attention_builder, key, val)
+        except:
+            if fail_on_exception:
+                raise
 
     def get(self):
         """Build the transformer and return it."""
@@ -389,13 +396,20 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
         if key[0] == "_":
             return super().__setattr__(key, val)
 
-        # Existing attributes are settable
+        # Existing attributes are settable but they might also be attention
+        # parameters so try that as well
+        fail_on_exception = True
         if hasattr(self, key):
-            return super().__setattr__(key, val)
+            super().__setattr__(key, val)
+            fail_on_exception = False
 
         # Non-existing "public" attributes may be attention parameters
-        setattr(self._self_attention_builder, key, val)
-        setattr(self._cross_attention_builder, key, val)
+        try:
+            setattr(self._self_attention_builder, key, val)
+            setattr(self._cross_attention_builder, key, val)
+        except:
+            if fail_on_exception:
+                raise
 
     def get(self):
         """Build the transformer and return it."""

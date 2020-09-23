@@ -49,7 +49,11 @@ class Registry(object):
         return key in self._parameters
 
     def validate_parameter(self, key, value):
-        return self._parameters[key].get(value)
+        try:
+            return self._parameters[key].get(value)
+        except Exception as e:
+            raise ValueError(("Invalid value {!r} for "
+                              "parameter {!r}").format(value, key)) from e
 
 
 AttentionRegistry = Registry()

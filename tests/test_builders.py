@@ -13,6 +13,21 @@ from fast_transformers.builders import \
     RecurrentEncoderBuilder, \
     TransformerDecoderBuilder, \
     RecurrentDecoderBuilder
+from fast_transformers.attention_registry import AttentionRegistry, Int
+
+
+class TestAttention:
+    def __init__(self, n_heads, query_dimensions):
+        self.n_heads = n_heads
+        self.query_dimensions = query_dimensions
+
+AttentionRegistry.register(
+    "test-attention", TestAttention,
+    [
+        ("n_heads", Int),
+        ("query_dimensions", Int)
+    ]
+)
 
 
 class TestBuilders(unittest.TestCase):
@@ -154,6 +169,18 @@ class TestBuilders(unittest.TestCase):
                 softmax_temp=0.125,
                 length_limit=512
             ).get()
+
+    def test_transformer_parameters_to_attention(self):
+        with self.assertRaises(ValueError):
+            transformer = TransformerEncoderBuilder.from_kwargs(
+                attention_type="test-attention"
+            ).get()
+
+        transformer = TransformerEncoderBuilder.from_kwargs(
+            attention_type="test-attention",
+            n_heads=8,
+            query_dimensions=64
+        ).get()
 
 
 if __name__ == "__main__":
