@@ -15,6 +15,11 @@
     inline int popcnt(int64_t x) {
         return __builtin_popcountll(x);
     }
+#elif _MSC_VER
+#  include <intrin.h>
+#  define __builtin_popcount __popcnt
+#endif
+
 #else
     #error "Popcnt not implemented"
 #endif
