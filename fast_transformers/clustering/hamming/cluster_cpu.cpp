@@ -18,8 +18,6 @@
 #elif _MSC_VER
 #  include <intrin.h>
 #  define __builtin_popcount __popcnt
-#endif
-
 #else
     #error "Popcnt not implemented"
 #endif
