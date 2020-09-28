@@ -223,36 +223,6 @@ class TestLocalProductCUDA(unittest.TestCase):
                 self._test_benchmark_weighted_average(k)
 
     def _test_result_weighted_average_backward(self, CP):
-        N = 1
-        L = 64
-        H = 1
-        E = 16
-        local_context = 33
-        A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
-        V = torch.rand(N, H, L, E).cuda()
-        grad_in = torch.ones(N, H, L, E).cuda()
-        GA, GV = self.kernels[CP]["wa_backward"](A, V, grad_in)
-
-        A = A.requires_grad_(True)
-        V = V.requires_grad_(True)
-        out = torch.zeros(N, H, L, E).cuda()
-        for i in range(L):
-            start = i - local_context//2
-            end = start + local_context
-            start = max(0, start)
-            end = min(L, end)
-            kstart = local_context//2 - abs(i-start)
-            out[:, :, i] = torch.einsum(
-                "nhl,nhle->nhe",
-                A[:, :, i, kstart:kstart+end-start],
-                V[:, :, start:end]
-            )
-        out.sum().backward()
-
-        self.assertTrue(torch.allclose(A.grad, GA, atol=1e-5, rtol=1e-5))
-        self.assertTrue(torch.allclose(V.grad, GV, atol=1e-5, rtol=1e-5))
-        return
-
         for t in range(10):
             N = 10
             L = 100
@@ -287,6 +257,41 @@ class TestLocalProductCUDA(unittest.TestCase):
         for k in self.kernels.keys():
             with self.subTest(msg=k):
                 self._test_result_weighted_average_backward(k)
+
+    def _test_benchmark_weighted_average_backward(self, CP):
+        N = 10
+        L = 4096
+        H = 12
+        E = 64
+        Q = torch.rand(N, H, L, E).cuda()
+        K = torch.rand(N, H, L, E).cuda()
+        local_context = 512
+        A = torch.softmax(torch.randn(N, H, L, local_context), dim=-1).cuda()
+        V = torch.rand(N, H, L, E).cuda()
+        grad_in = torch.ones(N, H, L, E).cuda()
+
+        # warmup the cache
+        for i in range(10):
+            self.kernels[CP]["wa_backward"](A, V, grad_in)
+
+        # measure
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+        for i in range(10):
+            self.kernels[CP]["wa_backward"](A, V, grad_in)
+        end.record()
+        torch.cuda.synchronize()
+        print("[{}] GPU time taken: {} (ms)".format(
+            CP,
+            start.elapsed_time(end)
+        ))
+
+    @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
+    def test_benchmark_weighted_average_backward(self):
+        for k in self.kernels.keys():
+            with self.subTest(msg=k):
+                self._test_benchmark_weighted_average_backward(k)
 
 
 if __name__ == "__main__":
