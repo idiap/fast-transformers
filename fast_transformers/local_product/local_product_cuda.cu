@@ -497,8 +497,8 @@ torch::Tensor local_dot_product(
 
     sliding_dot(
         masked_lp_copy::factory(attn_mask, key_lengths),
-        queries.view({N*H, L, E}),
-        keys.view({N*H, L, E}),
+        queries.reshape({N*H, L, E}),
+        keys.reshape({N*H, L, E}),
         output.view({N*H, L, local_context}),
         local_context
     );
@@ -634,8 +634,8 @@ std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
     // Compute the gradient wrt to the attention
     sliding_dot(
         lp_copy(),
-        grad.view({N*H, L, E}),
-        values.view({N*H, L, E}),
+        grad.reshape({N*H, L, E}),
+        values.reshape({N*H, L, E}),
         grad_attention.view({N*H, L, local_context}),
         local_context
     );
