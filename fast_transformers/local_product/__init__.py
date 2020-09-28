@@ -24,7 +24,8 @@ except ImportError:
 
 
 class LocalDotProduct(torch.autograd.Function):
-    """TODO"""
+    """Compute the dot product of the queries and keys but only consider a
+    local neighborhood of each query."""
     dot = {
         "cpu": local_dot_product_cpu,
         "cuda": local_dot_product_cuda
@@ -66,7 +67,7 @@ class LocalDotProduct(torch.autograd.Function):
 
 
 class LocalWeightedAverage(torch.autograd.Function):
-    """TODO"""
+    """Compute the weighted average of the values with the local attention."""
     avg = {
         "cpu": local_weighted_average_cpu,
         "cuda": local_weighted_average_cuda
