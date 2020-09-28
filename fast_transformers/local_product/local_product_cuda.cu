@@ -19,89 +19,6 @@ inline int ceildiv(int a, int b) {
     return (a + b - 1)/b;
 }
 
-template <typename copy_implementation>
-__global__ void sliding_dot_copy_kernel(
-    copy_implementation copy,
-    float3_accessor buffer,
-    float3_accessor output,
-    int local_context,
-    int l_start,
-    int s_start,
-    int buffer_dim12,
-    int buffer_dim2
-) {
-    copy(
-        buffer,
-        output,
-        local_context,
-        l_start,
-        s_start,
-        buffer_dim12,
-        buffer_dim2
-    );
-}
-
-/**
- * Multiply every A_i with every B_j iff |i-j| < local_context/2.
- *
- * The strategy is to compute the local products in blocks and keep the GPU
- * busy and then select the valid results from all the intermediate ones.
- *
- * The naming means that both arguments span the full sequences, namely both A
- * and B are the global matrices.
- *
- * Arguments
- * ---------
- *     A: (N, L, E)
- *     B: (N, L, E)
- *     out: (N, L, local_context)
- */
-template <int a_blocks=64, typename CopyImplementation>
-void sliding_dot(
-    CopyImplementation copy_implementation,
-    torch::Tensor A,
-    torch::Tensor B,
-    torch::Tensor out,
-    int local_context
-) {
-    int N = A.size(0);
-    int L = A.size(1);
-
-    // Save the intermediate results in here
-    auto buffer = A.new_zeros({N, a_blocks, a_blocks+local_context});
-
-    for (int l=0; l<L; l+=a_blocks) {
-        // Compute the sizes of the sub problems to be computed in this
-        // block iteration
-        int s_start = std::max(0, l-local_context/2);
-        int s_end = std::min(L, l-local_context/2+local_context+a_blocks);
-        int n_b = s_end-s_start;
-        int n_a = std::min(L-l, a_blocks);
-
-        // Compute the dot products
-        auto buff = buffer.narrow(1, 0, n_a).narrow(2, 0, n_b);
-        at::matmul_out(
-            buff,
-            A.narrow(1, l, n_a),
-            B.narrow(1, s_start, n_b).transpose(1, 2)
-        );
-
-        // Select the correct results from the buffer
-        const int threads = 1024;
-        int blocks = ceildiv(buff.numel(), threads);
-        sliding_dot_copy_kernel<<<blocks, threads>>>(
-            copy_implementation,
-            buff.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
-            out.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
-            local_context,
-            l,
-            s_start,
-            buff.size(1)*buff.size(2),
-            buff.size(2)
-        );
-    }
-}
-
 
 /**
  * This copy implementation simply copies the appropriate values from the
@@ -198,69 +115,90 @@ struct lp_copy
 };
 
 
-template <int LB=32, int KB=32, int EB=32>
-__global__ void local_copy_scaled(
-    float4_accessor factors,
-    float4_accessor values,
-    float4_accessor output,
-    dim3 strides
+/**
+ * A kernel that just delegates the copying to the passed in copy
+ * implementation.
+ */
+template <typename copy_implementation>
+__global__ void sliding_dot_copy_kernel(
+    copy_implementation copy,
+    float3_accessor buffer,
+    float3_accessor output,
+    int local_context,
+    int l_start,
+    int s_start,
+    int buffer_dim12,
+    int buffer_dim2
 ) {
-    int idx = blockIdx.x;
-    int n = idx / strides.x;
-    idx -= n*strides.x;
-    int h = idx / strides.y;
-    idx -= h*strides.y;
-    int lblock = idx / strides.z;
-    idx -= lblock*strides.z;
-    int eblock = idx;
+    copy(
+        buffer,
+        output,
+        local_context,
+        l_start,
+        s_start,
+        buffer_dim12,
+        buffer_dim2
+    );
+}
 
-    int local_context = factors.size(3);
 
-    int l_local = threadIdx.x / EB;
-    int e_local = threadIdx.x - l_local*EB;
-    int l = lblock * LB + l_local;
-    int e = eblock * EB + e_local;
+/**
+ * Multiply every A_i with every B_j iff |i-j| < local_context/2.
+ *
+ * The strategy is to compute the local products in blocks and keep the GPU
+ * busy and then select the valid results from all the intermediate ones using
+ * the copy implementation.
+ *
+ * Arguments
+ * ---------
+ *     copy_implementation: The kernel implementation that selects the results.
+ *     A: Tensor of shape (N, L, E)
+ *     B: Tensor of shape (N, L, E)
+ *     out: Tensor of shape (N, L, local_context)
+ */
+template <int a_blocks=64, typename CopyImplementation>
+void sliding_dot(
+    CopyImplementation copy_implementation,
+    torch::Tensor A,
+    torch::Tensor B,
+    torch::Tensor out,
+    int local_context
+) {
+    int N = A.size(0);
+    int L = A.size(1);
 
-    if (n > factors.size(0)) {
-        return;
-    }
+    // Save the intermediate results in here
+    auto buffer = A.new_zeros({N, a_blocks, a_blocks+local_context});
 
-    extern __shared__ float shared_mem[];
-    float * s_factors = shared_mem;
-    float * s_values = s_factors + LB*KB;
+    for (int l=0; l<L; l+=a_blocks) {
+        // Compute the sizes of the sub problems to be computed in this
+        // block iteration
+        int s_start = std::max(0, l-local_context/2);
+        int s_end = std::min(L, l-local_context/2+local_context+a_blocks);
+        int n_b = s_end-s_start;
+        int n_a = std::min(L-l, a_blocks);
 
-    for (int k=0; k<local_context; k+=KB) {
-        // Load the data in shared mem
-        int s1 = l - local_context/2 + k;
-        int s2 = s1 + LB;
-        int scurrent = s1 + e_local;
-        if (l < factors.size(2) && k + e_local < local_context && scurrent >= 0 && scurrent < values.size(2)) {
-            s_factors[l_local*KB + e_local] = factors[n][h][l][k + e_local];
-        } else {
-            s_factors[l_local*KB + e_local] = 0;
-        }
-        if (e < values.size(3) && s1 >=0 && s1 < values.size(2)) {
-            s_values[l_local*EB + e_local] = values[n][h][s1][e];
-        } else {
-            s_values[l_local*EB + e_local] = 0;
-        }
-        if (e < values.size(3) && s2 >=0 && s2 < values.size(2)) {
-            s_values[(l_local+LB)*EB + e_local] = values[n][h][s2][e];
-        } else {
-            s_values[(l_local+LB)*EB + e_local] = 0;
-        }
-        __syncthreads();
+        // Compute the dot products
+        auto buff = buffer.narrow(1, 0, n_a).narrow(2, 0, n_b);
+        at::matmul_out(
+            buff,
+            A.narrow(1, l, n_a),
+            B.narrow(1, s_start, n_b).transpose(1, 2)
+        );
 
-        // Do the dot product
-        float result = 0;
-        #pragma unroll
-        for (int k_local=0; k_local<KB; k_local++) {
-            result += s_factors[l_local*KB + k_local] * s_values[(k_local + l_local)*EB + e_local];
-        }
-        if (l < factors.size(2) && e < values.size(3)) {
-            output[n][h][l][e] += result;
-        }
-        __syncthreads();
+        // Select the correct results from the buffer
+        const int threads = 1024;
+        int blocks = ceildiv(buff.numel(), threads);
+        sliding_dot_copy_kernel<<<blocks, threads>>>(
+            copy_implementation,
+            buff.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
+            out.packed_accessor32<float, 3, torch::RestrictPtrTraits>(),
+            local_context,
+            l,
+            s_start,
+            buff.size(1)*buff.size(2),
+            buff.size(2)
+        );
     }
 }
 
@@ -348,6 +286,165 @@ __global__ void local_copy_scaled_transpose(
         }
 
         if (s < values.size(2) && e < values.size(3)) {
+            output[n][h][s][e] += result;
+        }
+        __syncthreads();
+    }
+}
+
+
+template <
+    int sequence_blocksize=32,
+    int feature_blocksize=32,
+    int k_blocksize=32
+>
+struct ForwardIndexing
+{
+    int L;
+    int E;
+    int local_context;
+
+    ForwardIndexing(int _L, int _E, int _local_context) :
+        L(_L), E(_E), local_context(_local_context)
+        {}
+
+    template <typename accessor>
+    inline __device__
+    void load_factors(
+        accessor factors,
+        accessor values,
+        float * s_factors,
+        int sblock,
+        int eblock,
+        int s_local,
+        int e_local,
+        int k_start
+    ) {
+        int l = sblock*sequence_blocksize + s_local;
+        int k = k_start + e_local;
+        int s = l - local_context/2 + k;
+
+        if (l < L && k < local_context && s >= 0 && s < L) {
+            s_factors[s_local*k_blocksize + e_local] = factors[l][k];
+        } else {
+            s_factors[s_local*k_blocksize + e_local] = 0;
+        }
+    }
+
+    template <typename accessor>
+    inline __device__
+    void load_values(
+        accessor factors,
+        accessor values,
+        float * s_values,
+        int sblock,
+        int eblock,
+        int s_local,
+        int e_local,
+        int k_start
+    ) {
+        int l = sblock*sequence_blocksize + s_local;
+        int e = eblock * feature_blocksize + e_local;
+        int s = l - local_context/2 + k_start;
+
+        if (e < E && s >= 0 && s < L) {
+            s_values[s_local*feature_blocksize + e_local] = values[s][e];
+        } else {
+            s_values[s_local*feature_blocksize + e_local] = 0;
+        }
+
+        s += sequence_blocksize;
+        if (e < E && s >= 0 && s < L) {
+            s_values[(s_local + feature_blocksize)*feature_blocksize + e_local] = values[s][e];
+        } else {
+            s_values[(s_local + feature_blocksize)*feature_blocksize + e_local] = 0;
+        }
+    }
+};
+
+
+/**
+ * This kernel performs the dot product of factors with sliding chunks of
+ * values and saves the result in output.
+ *
+ * The shapes of the arguments are NHLK and NHLE.
+ */
+template <
+    typename IndexPolicy,
+    int sequence_blocksize=32,
+    int feature_blocksize=32,
+    int k_blocksize=32
+>
+__global__ void sliding_weighted_average(
+    IndexPolicy indexing,
+    float4_accessor factors,
+    float4_accessor values,
+    float4_accessor output,
+    dim3 strides
+) {
+    int idx = blockIdx.x;
+    int n = idx / strides.x;
+    idx -= n*strides.x;
+    int h = idx / strides.y;
+    idx -= h*strides.y;
+    int sblock = idx / strides.z;
+    idx -= sblock*strides.z;
+    int eblock = idx;
+
+    int local_context = factors.size(3);
+
+    int s_local = threadIdx.x / feature_blocksize;
+    int e_local = threadIdx.x - s_local*feature_blocksize;
+    int s = sblock * sequence_blocksize + s_local;
+    int e = eblock * feature_blocksize + e_local;
+
+    if (n > factors.size(0)) {
+        return;
+    }
+
+    // Declare the shared memory to load the values and factors.
+    extern __shared__ float shared_mem[];
+    float * s_factors = shared_mem;
+    float * s_values = s_factors + sequence_blocksize * k_blocksize;
+
+    // Main dot product loop
+    for (int k=0; k<local_context; k+=k_blocksize) {
+        // Load the factors in shared memory
+        indexing.load_factors(
+            factors[n][h],
+            values[n][h],
+            s_factors,
+            sblock,
+            eblock,
+            s_local,
+            e_local,
+            k
+        );
+
+        // Load the values in shared memory
+        indexing.load_values(
+            factors[n][h],
+            values[n][h],
+            s_values,
+            sblock,
+            eblock,
+            s_local,
+            e_local,
+            k
+        );
+
+        __syncthreads();
+
+        // Compute the dot product
+        float result = 0;
+        #pragma unroll
+        for (int k_local=0; k_local<k_blocksize; k_local++) {
+            result += (
+                s_factors[s_local*k_blocksize + k_local] *
+                s_values[(s_local + k_local)*feature_blocksize + e_local]
+            );
+        }
+        if (s < output.size(2) && e < output.size(3)) {
             output[n][h][s][e] += result;
         }
         __syncthreads();
@@ -459,12 +556,20 @@ torch::Tensor local_weighted_average(
         eblocks
     );
 
-    local_copy_scaled<<<blocks, threads, shared_mem>>>(
+    sliding_weighted_average<<<blocks, threads, shared_mem>>>(
+        ForwardIndexing<32, 32, 32>(L, E, K),
         attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         output.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         strides
     );
+
+    //local_copy_scaled<<<blocks, threads, shared_mem>>>(
+    //    attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+    //    values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+    //    output.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+    //    strides
+    //);
 
     return output;
 }
