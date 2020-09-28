@@ -1,7 +1,7 @@
 Fast Transformers
 =================
 
-Transformers are very succsessfull models that achieve state of the art
+Transformers are very successful models that achieve state of the art
 performance in many natural language tasks. However, it is very difficult to
 scale them to long sequences due to the quadratic scaling of self-attention.
 
