@@ -203,94 +203,76 @@ void sliding_dot(
 }
 
 
-struct IncreasingLK
+template <
+    int sequence_blocksize=32,
+    int feature_blocksize=32,
+    int k_blocksize=32
+>
+struct ForwardValueIndexing
 {
+    int L;
+    int E;
+    int local_context;
+
+    ForwardValueIndexing(int _L, int _E, int _local_context) :
+        L(_L), E(_E), local_context(_local_context)
+        {}
+
+    template <typename accessor>
     inline __device__
-    int operator()(int k, int e_local, int local_context) {
-        return k+e_local;
+    void load_factors(
+        accessor factors,
+        accessor values,
+        float * s_factors,
+        int sblock,
+        int eblock,
+        int s_local,
+        int e_local,
+        int k_start
+    ) {
+        int k = k_start + e_local;
+        int l = (
+            sblock * sequence_blocksize + s_local - (local_context-1)/2 + k
+        );
+
+        if (l >= 0 && l < L && k < local_context) {
+            s_factors[s_local * k_blocksize + e_local] = factors[l][k];
+        } else {
+            s_factors[s_local * k_blocksize + e_local] = 0;
+        }
+    }
+
+    template <typename accessor>
+    inline __device__
+    void load_values(
+        accessor factors,
+        accessor values,
+        float * s_values,
+        int sblock,
+        int eblock,
+        int s_local,
+        int e_local,
+        int k_start
+    ) {
+        int l = (
+            sblock * sequence_blocksize + s_local - (local_context-1)/2 + k_start
+        );
+        int e = eblock * feature_blocksize + e_local;
+
+        if (e < E && l >= 0 && l < L) {
+            s_values[s_local*feature_blocksize + e_local] = values[l][e];
+        } else {
+            s_values[s_local*feature_blocksize + e_local] = 0;
+        }
+
+        l += sequence_blocksize;
+        if (e < E && l >= 0 && l < L) {
+            s_values[(s_local + feature_blocksize)*feature_blocksize + e_local] = values[l][e];
+        } else {
+            s_values[(s_local + feature_blocksize)*feature_blocksize + e_local] = 0;
+        }
     }
 };
-struct ReverseLK
-{
-    inline __device__
-    int operator()(int k, int e_local, int local_context) {
-        return local_context-k-e_local-1;
-    }
-};
-
-
-template <typename lk_policy_type, int LB=32, int KB=32, int EB=32>
-__global__ void local_copy_scaled_transpose(
-    float4_accessor factors,
-    float4_accessor values,
-    float4_accessor output,
-    dim3 strides,
-    lk_policy_type lk_policy
-) {
-    int idx = blockIdx.x;
-    int n = idx / strides.x;
-    idx -= n*strides.x;
-    int h = idx / strides.y;
-    idx -= h*strides.y;
-    int sblock = idx / strides.z;
-    idx -= sblock*strides.z;
-    int eblock = idx;
-
-    int local_context = factors.size(3);
-
-    int s_local = threadIdx.x / EB;
-    int e_local = threadIdx.x - s_local*EB;
-    int s = sblock * LB + s_local;
-    int e = eblock * EB + e_local;
-
-    if (n > factors.size(0)) {
-        return;
-    }
-
-    extern __shared__ float shared_mem[];
-    float * s_factors = shared_mem;
-    float * s_values = s_factors + LB*KB;
-
-    for (int k=0; k<local_context; k+=KB) {
-        // Load the data in shared mem
-        int l = s - (local_context-1)/2 + k;
-        int l2 = l + LB;
-        // load the values
-        if (l >= 0 && l < factors.size(2) && e < values.size(3)) {
-            s_values[s_local*EB + e_local] = values[n][h][l][e];
-        } else {
-            s_values[s_local*EB + e_local] = 0;
-        }
-        if (l2 >= 0 && l2 < factors.size(2) && e < values.size(3)) {
-            s_values[(s_local + LB)*EB + e_local] = values[n][h][l2][e];
-        } else {
-            s_values[(s_local + LB)*EB + e_local] = 0;
-        }
-
-        // load factors
-        int lcurrent = l+e_local;
-        int kcurrent = k+e_local;
-        if (lcurrent >= 0 && lcurrent < factors.size(2) && kcurrent < local_context) {
-            int t = lk_policy(k, e_local, local_context);
-            s_factors[s_local*KB + e_local] = factors[n][h][l+e_local][t];
-        } else {
-            s_factors[s_local*KB + e_local] = 0;
-        }
-        __syncthreads();
-
-        // Do the dot product
-        float result = 0;
-        #pragma unroll
-        for (int k_local=0; k_local<KB; k_local++) {
-            result += s_values[(s_local+k_local)*EB + e_local] * s_factors[s_local*KB + k_local];
-        }
-
-        if (s < values.size(2) && e < values.size(3)) {
-            output[n][h][s][e] += result;
-        }
-        __syncthreads();
-    }
-}
 
 
 template <
@@ -298,13 +280,54 @@ template <
     int feature_blocksize=32,
     int k_blocksize=32
 >
-struct ForwardIndexing
+struct ReverseValueIndexing : ForwardValueIndexing<sequence_blocksize,
+                                                   feature_blocksize,
+                                                   k_blocksize>
+{
+    typedef ForwardValueIndexing<sequence_blocksize, feature_blocksize, k_blocksize> parent;
+
+    ReverseValueIndexing(int _L, int _E, int _local_context) :
+        parent(_L, _E, _local_context)
+        {}
+
+    template <typename accessor>
+    inline __device__
+    void load_factors(
+        accessor factors,
+        accessor values,
+        float * s_factors,
+        int sblock,
+        int eblock,
+        int s_local,
+        int e_local,
+        int k_start
+    ) {
+        int k = k_start + e_local;
+        int l = (
+            sblock * sequence_blocksize + s_local - (parent::local_context-1)/2 + k
+        );
+
+        if (l >= 0 && l < parent::L && k < parent::local_context) {
+            s_factors[s_local * k_blocksize + e_local] = factors[l][parent::local_context-k-1];
+        } else {
+            s_factors[s_local * k_blocksize + e_local] = 0;
+        }
+    }
+};
+
+
+template <
+    int sequence_blocksize=32,
+    int feature_blocksize=32,
+    int k_blocksize=32
+>
+struct ForwardFactorIndexing
 {
     int L;
     int E;
     int local_context;
 
-    ForwardIndexing(int _L, int _E, int _local_context) :
+    ForwardFactorIndexing(int _L, int _E, int _local_context) :
         L(_L), E(_E), local_context(_local_context)
         {}
 
@@ -513,18 +536,19 @@ std::tuple<torch::Tensor, torch::Tensor> local_dot_backward(
         eblocks
     );
 
-    local_copy_scaled<<<blocks, threads, shared_mem>>>(
+    sliding_weighted_average<<<blocks, threads, shared_mem>>>(
+        ForwardFactorIndexing<32, 32, 32>(L, E, K),
         grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         grad_queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         strides
     );
-    local_copy_scaled_transpose<<<blocks, threads, shared_mem>>>(
+    sliding_weighted_average<<<blocks, threads, shared_mem>>>(
+        ForwardValueIndexing<32, 32, 32>(L, E, K),
         grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        strides,
-        IncreasingLK()
+        strides
     );
 
     return std::make_tuple(grad_queries, grad_keys);
@@ -557,19 +581,12 @@ torch::Tensor local_weighted_average(
     );
 
     sliding_weighted_average<<<blocks, threads, shared_mem>>>(
-        ForwardIndexing<32, 32, 32>(L, E, K),
+        ForwardFactorIndexing<32, 32, 32>(L, E, K),
         attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         output.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         strides
     );
-
-    //local_copy_scaled<<<blocks, threads, shared_mem>>>(
-    //    attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-    //    values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-    //    output.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-    //    strides
-    //);
 
     return output;
 }
@@ -605,12 +622,12 @@ std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
             eblocks
         );
 
-        local_copy_scaled_transpose<<<blocks, threads, shared_mem>>>(
+        sliding_weighted_average<<<blocks, threads, shared_mem>>>(
+            ReverseValueIndexing<32, 32, 32>(L, E, local_context),
             attention.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
             grad.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
             grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            strides,
-            ReverseLK()
+            strides
         );
     }
 
