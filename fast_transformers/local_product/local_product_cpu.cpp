@@ -49,7 +49,7 @@ torch::Tensor local_dot_product(
     auto qa = queries.accessor<float, 4>();
     auto ka = keys.accessor<float, 4>();
     auto oa = output.accessor<float, 4>();
-    auto kla = key_lengths.accessor<long, 1>();
+    auto kla = key_lengths.accessor<int64_t, 1>();
     auto ama = attn_mask.accessor<float, 2>();
 
     #pragma omp parallel for collapse(2)
@@ -95,7 +95,7 @@ std::tuple<torch::Tensor, torch::Tensor> local_dot_backward(
     // Create accessors for all the arguments
     auto qa = queries.accessor<float, 4>();
     auto ka = keys.accessor<float, 4>();
-    auto kla = key_lengths.accessor<long, 1>();
+    auto kla = key_lengths.accessor<int64_t, 1>();
     auto ga = grad.accessor<float, 4>();
     auto gqa = grad_queries.accessor<float, 4>();
     auto gka = grad_keys.accessor<float, 4>();
