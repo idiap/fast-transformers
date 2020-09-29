@@ -53,6 +53,20 @@ class CausalLinearAttention(Module):
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
+    def _make_sizes_compatible(self, Q, K):
+        """Either slice or pad K in case that the sizes do not match between Q
+        and K."""
+        N, L, H, E = Q.shape
+        _, S, _, _ = K.shape
+        if L == S:
+            return Q, K
+
+        if L < S:
+            return Q, K[:, :L, :, :]
+
+        if L > S:
+            return Q, torch.cat([K, K.new_zeros(N, L-S, H, E)], dim=1)
+
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
         # Apply the feature map to the queries and keys
@@ -65,6 +79,10 @@ class CausalLinearAttention(Module):
             raise RuntimeError(("CausalLinearAttention only supports full "
                                 "lower triangular masks"))
         K = K * key_lengths.float_matrix[:, :, None, None]
+
+        # Ensure that Q and K have compatible sizes for the following
+        # computations, namely L == S
+        Q, K = self._make_sizes_compatible(Q, K)
 
         # TODO: Shall we divide the Q and K with a relatively large number to
         #       avoid numerical instabilities in computing the denominator?
