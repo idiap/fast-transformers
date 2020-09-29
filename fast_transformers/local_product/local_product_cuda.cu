@@ -168,7 +168,10 @@ void sliding_dot(
     int L = A.size(1);
 
     // Save the intermediate results in here
-    auto buffer = A.new_zeros({N, a_blocks, a_blocks+local_context});
+    auto buffer = torch::zeros(
+        {N, a_blocks, a_blocks+local_context},
+        A.options()
+    );
 
     for (int l=0; l<L; l+=a_blocks) {
         // Compute the sizes of the sub problems to be computed in this

@@ -144,7 +144,7 @@ torch::Tensor local_weighted_average(
     int E = values.size(3);
 
     // Allocate space for the output
-    auto output = values.new_zeros({N, H, L, E});
+    auto output = torch::zeros({N, H, L, E}, values.options());
 
     // Create accessors for all the arguments
     auto aa = attention.accessor<float, 4>();
