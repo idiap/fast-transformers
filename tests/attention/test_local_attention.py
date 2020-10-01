@@ -11,6 +11,7 @@ import unittest
 import torch
 
 from fast_transformers.masking import FullMask, LengthMask
+from fast_transformers.attention.full_attention import FullAttention
 from fast_transformers.attention.local_attention import LocalAttention
 
 
@@ -37,6 +38,19 @@ class TestLocalAttention(unittest.TestCase):
         m2 = m3 = LengthMask(torch.tensor([8, 16, 64], dtype=torch.long))
         v_hat = att(q, k, v, m1, m2, m3)
         self.assertFalse(torch.any(torch.isnan(v_hat)))
+
+    def test_compare_with_full(self):
+        local_att = LocalAttention(17, softmax_temp=1).eval()
+        full_att = FullAttention(softmax_temp=1).eval()
+
+        q, k, v, m1, m2, m3 = self._get_inputs(N=10, L=128, S=128, D=32)
+        m = FullMask(
+            torch.abs(torch.arange(128)[:, None] - torch.arange(128)[None]) < 9
+        )
+        v_full = full_att(q, k, v, m, m2, m3)
+        v_local = local_att(q, k, v, m1, m2, m3)
+
+        self.assertTrue(torch.allclose(v_full, v_local, atol=1e-5, rtol=1e-5))
 
     @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
     def test_benchmark_cpu(self):
