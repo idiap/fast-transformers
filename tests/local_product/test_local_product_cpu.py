@@ -40,7 +40,7 @@ class TestLocalProductCPU(unittest.TestCase):
             lengths = torch.full((N,), L, dtype=torch.long)
             out = self.kernels[CP]["dot"](Q, K, mask, lengths, local_context)
 
-            QK = torch.full((N, H, L, local_context), float("-inf"),
+            QK = torch.full((N, H, L, local_context), -1e24,
                             dtype=torch.float32)
             for i in range(L):
                 start = i - local_context//2
@@ -77,7 +77,7 @@ class TestLocalProductCPU(unittest.TestCase):
 
             Q = Q.requires_grad_(True)
             K = K.requires_grad_(True)
-            QK = torch.full((N, H, L, local_context), float("-inf"),
+            QK = torch.full((N, H, L, local_context), -1e24,
                             dtype=torch.float32)
             for i in range(L):
                 start = i - local_context//2
@@ -102,12 +102,12 @@ class TestLocalProductCPU(unittest.TestCase):
 
     def _test_benchmark_forward(self, CP):
         N = 10
-        L = 1024
+        L = 2048
         H = 12
         E = 64
         Q = torch.rand(N, H, L, E)
         K = torch.rand(N, H, L, E)
-        local_context = 64
+        local_context = 512
         mask = torch.zeros(L, L)
         lengths = torch.full((N,), L, dtype=torch.long)
 

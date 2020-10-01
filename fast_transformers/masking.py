@@ -77,6 +77,16 @@ class BaseMask(object):
         return self._additive_matrix
 
     @property
+    def additive_matrix_finite(self):
+        """Same as additive_matrix but with -1e24 instead of infinity."""
+        if not hasattr(self, "_additive_matrix_finite"):
+            with torch.no_grad():
+                self._additive_matrix_finite = (
+                    (~self.bool_matrix).float() * (-1e24)
+                )
+        return self._additive_matrix_finite
+
+    @property
     def all_ones(self):
         """Return true if the mask is all ones."""
         if not hasattr(self, "_all_ones"):

@@ -51,7 +51,7 @@ class TestLocalProductCUDA(unittest.TestCase):
             lengths = torch.full((N,), L, dtype=torch.long).cuda()
             out = self.kernels[CP]["dot"](Q, K, mask, lengths, local_context)
 
-            QK = torch.full((N, H, L, local_context), float("-inf"),
+            QK = torch.full((N, H, L, local_context), -1e24,
                             dtype=torch.float32).cuda()
             for i in range(L):
                 start = i - local_context//2
@@ -134,7 +134,7 @@ class TestLocalProductCUDA(unittest.TestCase):
 
             Q = Q.requires_grad_(True)
             K = K.requires_grad_(True)
-            QK = torch.full((N, H, L, local_context), float("-inf"),
+            QK = torch.full((N, H, L, local_context), -1e24,
                             dtype=torch.float32)
             for i in range(L):
                 start = i - local_context//2

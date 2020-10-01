@@ -42,8 +42,7 @@ torch::Tensor local_dot_product(
     int E = queries.size(3);
 
     // Allocate space for the output
-    auto fill_val = -std::numeric_limits<float>::infinity();
-    auto output = queries.new_full({N, H, L, local_context}, fill_val);
+    auto output = queries.new_full({N, H, L, local_context}, -1e24);
 
     // Create accessors for all the arguments
     auto qa = queries.accessor<float, 4>();

@@ -77,7 +77,7 @@ class LocalAttention(Module):
         QK = local_dot_product(
             queries,
             keys,
-            attn_mask.additive_matrix,
+            attn_mask.additive_matrix_finite,
             key_lengths.lengths,
             self.local_context
         )

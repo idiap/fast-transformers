@@ -10,7 +10,7 @@ import unittest
 
 import torch
 
-from fast_transformers.masking import FullMask
+from fast_transformers.masking import FullMask, LengthMask
 from fast_transformers.attention.local_attention import LocalAttention
 
 
@@ -30,6 +30,13 @@ class TestLocalAttention(unittest.TestCase):
         q, k, v, m1, m2, m3 = self._get_inputs()
         v = att(q, k, v, m1, m2, m3)
         self.assertTrue(v.is_contiguous())
+
+    def test_masked(self):
+        att = LocalAttention(16, softmax_temp=1)
+        q, k, v, m1, m2, m3 = self._get_inputs(N=3, L=64, S=64, D=32)
+        m2 = m3 = LengthMask(torch.tensor([8, 16, 64], dtype=torch.long))
+        v_hat = att(q, k, v, m1, m2, m3)
+        self.assertFalse(torch.any(torch.isnan(v_hat)))
 
     @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
     def test_benchmark_cpu(self):

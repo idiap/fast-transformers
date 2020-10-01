@@ -28,9 +28,11 @@ struct masked_lp_copy
 {
     float2_accessor attn_mask;
     long_accessor key_lengths;
+    int n_heads;
 
-    masked_lp_copy(float2_accessor _attn_mask, long_accessor _key_lengths) :
-        attn_mask(_attn_mask), key_lengths(_key_lengths)
+    masked_lp_copy(float2_accessor _attn_mask, long_accessor _key_lengths,
+                   int _n_heads) :
+        attn_mask(_attn_mask), key_lengths(_key_lengths), n_heads(_n_heads)
         {}
 
     __device__ void operator()(
@@ -61,16 +63,22 @@ struct masked_lp_copy
             return;
         }
 
+        if (s >= key_lengths[n / n_heads]) {
+            return;
+        }
+
         output[n][l][k] = buffer[n][l_offset][s_offset] + attn_mask[l][s];
     }
 
     static masked_lp_copy factory(
         torch::Tensor attn_mask,
-        torch::Tensor key_lengths
+        torch::Tensor key_lengths,
+        int n_heads
     ) {
         return masked_lp_copy(
             attn_mask.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
-            key_lengths.packed_accessor32<long, 1, torch::RestrictPtrTraits>()
+            key_lengths.packed_accessor32<long, 1, torch::RestrictPtrTraits>(),
+            n_heads
         );
     }
 };
@@ -493,13 +501,10 @@ torch::Tensor local_dot_product(
     int E = queries.size(3);
 
     // Allocate space for the output
-    auto output = queries.new_full(
-        {N, H, L, local_context},
-        -std::numeric_limits<float>::infinity()
-    );
+    auto output = queries.new_full({N, H, L, local_context}, -1e24);
 
     sliding_dot(
-        masked_lp_copy::factory(attn_mask, key_lengths),
+        masked_lp_copy::factory(attn_mask, key_lengths, H),
         queries.reshape({N*H, L, E}),
         keys.reshape({N*H, L, E}),
         output.view({N*H, L, local_context}),
