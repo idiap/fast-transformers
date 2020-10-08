@@ -25,7 +25,7 @@ class TestCausalLinearAttention(unittest.TestCase):
         )
 
     def test_forward(self):
-        att = CausalLinearAttention()
+        att = CausalLinearAttention(32)
         q, k, v, m1, m2, m3 = self._get_inputs(L=5, S=5)
         v = att(q, k, v, m1, m2, m3)
         self.assertTrue(v.is_contiguous())

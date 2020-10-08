@@ -32,12 +32,12 @@ class TestRecurrentCrossLinearAttention(unittest.TestCase):
         m3 = LengthMask(torch.full((N,), S, dtype=torch.int64))
 
         # Get the outputs from the attention in batch mode
-        att = LinearAttention()
+        att = LinearAttention(E)
         att.eval()
         v_out1 = att(q, k, v, m1, m2, m3)
 
         # Get the output from the attention in recurrent mode
-        att = RecurrentCrossLinearAttention()
+        att = RecurrentCrossLinearAttention(E)
         att.eval()
         v_out2_unstacked = []
         state = None

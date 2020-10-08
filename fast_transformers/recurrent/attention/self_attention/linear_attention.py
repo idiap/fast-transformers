@@ -9,14 +9,11 @@
 import torch
 from torch.nn import Module
 
-from ....attention_registry import RecurrentAttentionRegistry, Optional, \
+from ....attention_registry import RecurrentAttentionRegistry, Optional, Int, \
     Callable, EventDispatcherInstance
 from ....events import EventDispatcher
+from ....feature_maps import elu_feature_map
 from ..._utils import check_state
-
-
-def elu_feature_map(x):
-    return torch.nn.functional.elu(x) + 1
 
 
 class RecurrentLinearAttention(Module):
@@ -37,15 +34,23 @@ class RecurrentLinearAttention(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, feature_map=None, eps=1e-6, event_dispatcher=""):
+    def __init__(self, query_dimensions, feature_map=None, eps=1e-6,
+                 event_dispatcher=""):
         super(RecurrentLinearAttention, self).__init__()
-        self.feature_map = feature_map or elu_feature_map
+        self.feature_map = (
+            feature_map(query_dimensions) if feature_map else
+            elu_feature_map(query_dimensions)
+        )
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, key, value, state=None, memory=None):
         # Normalize state/memory
         state = check_state(state, memory)
+
+        # If this is a new sequence reinitialize the feature map
+        if state is None:
+            self.feature_map.new_feature_map()
 
         # Apply the feature map to the query and key
         Q = self.feature_map(query)
@@ -90,6 +95,7 @@ class RecurrentLinearAttention(Module):
 RecurrentAttentionRegistry.register(
     "linear", RecurrentLinearAttention,
     [
+        ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
         ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
@@ -97,6 +103,7 @@ RecurrentAttentionRegistry.register(
 RecurrentAttentionRegistry.register(
     "causal-linear", RecurrentLinearAttention,
     [
+        ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
         ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]

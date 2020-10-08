@@ -9,13 +9,10 @@ speed up autoregressive decoding."""
 import torch
 from torch.nn import Module
 
-from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, \
+from ....attention_registry import RecurrentCrossAttentionRegistry, Optional, Int, \
     Callable, EventDispatcherInstance
 from ....events import EventDispatcher
-
-
-def elu_feature_map(x):
-    return torch.nn.functional.elu(x) + 1
+from ....feature_maps import elu_feature_map
 
 
 class RecurrentCrossLinearAttention(Module):
@@ -34,13 +31,21 @@ class RecurrentCrossLinearAttention(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, feature_map=None, eps=1e-6, event_dispatcher=""):
+    def __init__(self, query_dimensions, feature_map=None, eps=1e-6,
+                 event_dispatcher=""):
         super(RecurrentCrossLinearAttention, self).__init__()
-        self.feature_map = feature_map or elu_feature_map
+        self.feature_map = (
+            feature_map(query_dimensions) if feature_map else
+            elu_feature_map(query_dimensions)
+        )
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, query, keys, values, key_lengths, state=None):
+        # If this is a new sequence re initialize the feature map
+        if state is None:
+            self.feature_map.new_feature_map()
+
         # Compute the feature representation of the query
         Q = self.feature_map(query)
 
@@ -67,6 +72,7 @@ class RecurrentCrossLinearAttention(Module):
 RecurrentCrossAttentionRegistry.register(
     "linear", RecurrentCrossLinearAttention,
     [
+        ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
         ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]

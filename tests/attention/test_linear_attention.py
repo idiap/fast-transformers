@@ -27,13 +27,13 @@ class TestLinearAttention(unittest.TestCase):
         )
 
     def test_forward(self):
-        att = LinearAttention()
+        att = LinearAttention(32)
         q, k, v, m1, m2, m3 = self._get_inputs()
         v = att(q, k, v, m1, m2, m3)
         self.assertTrue(v.is_contiguous())
 
     def test_masking(self):
-        att = LinearAttention()
+        att = LinearAttention(32)
         q, k, v, m1, m2, m3 = self._get_inputs()
 
         # Make sure that we raise an error if m1 is not all ones
@@ -52,7 +52,7 @@ class TestLinearAttention(unittest.TestCase):
     @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
     def test_benchmark_cpu(self):
         q, k, v, m1, m2, m3 = self._get_inputs(L=1024, S=1024, E=64, D=64)
-        att = LinearAttention()
+        att = LinearAttention(64)
 
         # warmup the cache
         for i in range(10):
@@ -70,7 +70,7 @@ class TestLinearAttention(unittest.TestCase):
     def test_benchmark_gpu(self):
         q, k, v, m1, m2, m3 = self._get_inputs(L=1024, S=1024, E=64, D=64,
                                                device="cuda")
-        att = LinearAttention()
+        att = LinearAttention(64)
 
         # warmup the caches
         for i in range(10):
