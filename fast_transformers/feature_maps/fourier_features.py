@@ -7,7 +7,7 @@
 "Rethinking Attention with Performers" https://arxiv.org/pdf/2009.14794.pdf
 """
 
-from math import sqrt
+from math import sqrt, log
 
 import torch
 
@@ -91,23 +91,33 @@ class Favor(RandomFourierFeatures):
         orthogonal: bool, If set to true then the random matrix should be
                     orthogonal which results in lower approximation variance
                     (default: True)
+        stabilize: bool, If set to True subtract the max norm from the
+                   exponentials to make sure that there are no infinities. It
+                   is equivalent to a robust implementation of softmax where
+                   the max is subtracted before the exponentiation.
+                   (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
-                 orthogonal=True):
+                 orthogonal=True, stabilize=False):
         super(Favor, self).__init__(query_dimensions, n_dims=n_dims,
                                     softmax_temp=softmax_temp,
                                     orthogonal=orthogonal)
+        self.stabilize = stabilize
 
     def forward(self, x):
         x = x * sqrt(self.softmax_temp)
-        norm_x_squared = torch.einsum("...d,...d->...", x, x)
-        hx = torch.exp(-norm_x_squared * 0.5) * sqrt(1/self.n_dims)
-
+        norm_x_squared = torch.einsum("...d,...d->...", x, x).unsqueeze(-1)
         u = x.unsqueeze(-2).matmul(self.omega).squeeze(-2)
-        exp_u1 = torch.exp(u)
-        exp_u2 = torch.exp(-u)
 
+        # Compute the offset for the exponential such that h(x) is multiplied
+        # in logspace. In particular, we multiply with exp(-norm_x_squared/2)
+        # and 1/sqrt(self.n_dims)
+        offset = norm_x_squared * 0.5 + 0.5 * log(self.n_dims)
+        if self.stabilize:
+            offset = offset + norm_x_squared.max()
+
+        exp_u1 = torch.exp(u - offset)
+        exp_u2 = torch.exp(-u - offset)
         phi = torch.cat([exp_u1, exp_u2], dim=-1)
-        phi = hx.unsqueeze(-1) * phi
 
         return phi
