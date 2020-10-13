@@ -91,9 +91,14 @@ Available feature maps
   function is `elu(x)+1`. It is also the default feature map.
 * [RandomFourierFeatures][5] approximates the RBF kernel using random Fourier
   features with trigonometric functions.
+* [SmoothedRandomFourierFeatures][8] approximates the RBF kernel plus a
+  constant for numerical stability.
 * [Favor][6] implements the positive random features designed specifically for
   transformers in the paper "[Rethinking Attention with Performers][7]". It
   should be preferred over the RandomFourierFeatures.
+* [GeneralizedRandomFeatures][9] is a simplification of Favor which does not
+  approximate softmax but it can increase the rank of the resulting attention
+  matrix.
 
 
 [1]: /api_docs/fast_transformers/attention/linear_attention.html
@@ -103,3 +108,5 @@ Available feature maps
 [5]: /api_docs/fast_transformers/feature_maps/fourier_features.html#fast_transformers.feature_maps.fourier_features.RandomFourierFeatures
 [6]: /api_docs/fast_transformers/feature_maps/fourier_features.html#fast_transformers.feature_maps.fourier_features.Favor
 [7]: https://arxiv.org/abs/2009.14794
+[8]: /api_docs/fast_transformers/feature_maps/fourier_features.html#fast_transformers.feature_maps.fourier_features.SmoothedRandomFourierFeatures
+[9]: /api_docs/fast_transformers/feature_maps/fourier_features.html#fast_transformers.feature_maps.fourier_features.GeneralizedRandomFeatures

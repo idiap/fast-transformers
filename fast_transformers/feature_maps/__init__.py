@@ -8,4 +8,5 @@ linear attention."""
 
 
 from .base import elu_feature_map, ActivationFunctionFeatureMap
-from .fourier_features import RandomFourierFeatures, Favor
+from .fourier_features import RandomFourierFeatures, Favor, \
+    SmoothedRandomFourierFeatures, GeneralizedRandomFeatures
