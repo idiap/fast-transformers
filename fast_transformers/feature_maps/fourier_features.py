@@ -56,6 +56,9 @@ class RandomFourierFeatures(FeatureMap):
         softmax_temp: float, The temerature for the Gaussian kernel
                       approximation exp(-t * |x-y|^2)
                       (default: 1/sqrt(query_dimensions))
+        orthogonal: bool, When True the random matrix is initialized for
+                    orthogonal random features to reduce the approximation
+                    variance (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
                  orthogonal=False):
@@ -85,6 +88,48 @@ class RandomFourierFeatures(FeatureMap):
         u = x.unsqueeze(-2).matmul(self.omega).squeeze(-2)
         phi = torch.cat([torch.cos(u), torch.sin(u)], dim=-1)
         return phi * sqrt(2/self.n_dims)
+
+
+class SmoothedRandomFourierFeatures(RandomFourierFeatures):
+    """Simply add a constant value to the dot product in order to avoid
+    possible numerical instabilities when the feature map is slightly
+    negative.
+
+    Implements K(x, y) = exp(-|x-y|^2) + s.
+
+    Arguments
+    ---------
+        query_dimensions: int, The input query dimensions in order to sample
+                          the noise matrix
+        n_dims: int, The size of the feature map (should be divisible by 2)
+                (default: query_dimensions)
+        softmax_temp: float, The temerature for the Gaussian kernel
+                      approximation exp(-t * |x-y|^2)
+                      (default: 1/sqrt(query_dimensions))
+        orthogonal: bool, When True the random matrix is initialized for
+                    orthogonal random features to reduce the approximation
+                    variance (default: False)
+        smoothing: float, The smoothing parameter to add to the dot product.
+    """
+    def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
+                 orthogonal=False, smoothing=1.0):
+        super(SmoothedRandomFourierFeatures, self).__init__(
+            query_dimensions,
+            n_dims=query_dimensions-1 if n_dims is None else n_dims-1,
+            softmax_temp=softmax_temp,
+            orthogonal=orthogonal,
+        )
+        self.smoothing = smoothing
+
+    def forward(self, x):
+        y = super().forward(x)
+        smoothing = torch.full(
+            y.shape[:-1] + (1,),
+            self.smoothing,
+            dtype=y.dtype,
+            device=y.device
+        )
+        return torch.cat([y, smoothing], dim=-1)
 
 
 class Favor(RandomFourierFeatures):
@@ -160,3 +205,40 @@ class Favor(RandomFourierFeatures):
         phi = torch.cat([exp_u1, exp_u2], dim=-1)
 
         return phi
+
+
+class GeneralizedRandomFeatures(RandomFourierFeatures):
+    """Implements the generalized random Fourier features from Performers.
+
+    It computes φ(χ) = [f(ω_1 χ), f(ω_2 χ), ..., f(ω_n χ)] where f(.) is the
+    passed in `kernel_fn`.
+
+    Arguments
+    ---------
+        query_dimensions: int, The input query dimensions in order to sample
+                          the noise matrix
+        n_dims: int, The size of the feature map (default: query_dimensions)
+        softmax_temp: float, A normalizer for the dot products that is
+                     multiplied to the input features before the feature map
+                     application (default: 1.0)
+        orthogonal: bool, If set to true then the random matrix should be
+                    orthogonal which results in lower approximation variance
+                    (default: True)
+        kernel_fn: callable, defines the f used for the feature map.
+                   (default: relu)
+    """
+    def __init__(self, query_dimensions, n_dims=None, softmax_temp=1.0,
+                 orthogonal=True, kernel_fn=torch.relu):
+        super(GeneralizedRandomFeatures, self).__init__(
+            query_dimensions,
+            n_dims=2*query_dimensions if n_dims is None else 2*n_dims,
+            softmax_temp=softmax_temp,
+            orthogonal=orthogonal
+        )
+        self.kernel_fn = kernel_fn
+
+    def forward(self, x):
+        if self.softmax_temp != 1.0:
+            x = x * sqrt(self.softmax_temp)
+        u = x.unsqueeze(-2).matmul(self.omega).squeeze(-2)
+        return self.kernel_fn(u)
