@@ -3,7 +3,7 @@
 # Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>
 #
 
-
+from functools import partial
 import unittest
 
 import torch
@@ -24,19 +24,21 @@ from fast_transformers.transformers import TransformerDecoderLayer, \
 
 class TestRecurrentTransformerDecoder(unittest.TestCase):
     def test_compare_with_batch(self):
-        tests = [
-            ("full", FullAttention, FullAttention, 
-             RecurrentFullAttention, RecurrentCrossFullAttention),
-            ("linear", CausalLinearAttention, LinearAttention,
-             RecurrentLinearAttention, RecurrentCrossLinearAttention)
-        ]
-
         N = 10
         L = 42
         S = 100
         D = 1024
+        E = D // 4
         x = torch.rand(N, L, D)
         m = torch.rand(N, S, D)
+
+        tests = [
+            ("full", FullAttention, FullAttention,
+             RecurrentFullAttention, RecurrentCrossFullAttention),
+            ("linear", partial(CausalLinearAttention, E),
+             partial(LinearAttention, E), partial(RecurrentLinearAttention, E),
+             partial(RecurrentCrossLinearAttention, E))
+        ]
 
         for name, a1, a2, a3, a4 in tests:
             dec = TransformerDecoder([

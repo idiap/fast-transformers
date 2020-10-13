@@ -48,10 +48,11 @@ class TestRecurrentTransformerEncoder(unittest.TestCase):
     def test_linear_attention_forward(self):
         d_model = 128
         n_heads = 4
+        d_head = d_model // n_heads
         transformer = RecurrentTransformerEncoder([
             RecurrentTransformerEncoderLayer(
                 RecurrentAttentionLayer(
-                    RecurrentLinearAttention(),
+                    RecurrentLinearAttention(d_head),
                     d_model,
                     n_heads
                 ),

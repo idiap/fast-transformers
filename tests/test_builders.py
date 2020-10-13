@@ -36,6 +36,7 @@ class TestBuilders(unittest.TestCase):
         builder = TransformerEncoderBuilder()
         builder.n_layers = 1
         builder.n_heads = 4
+        builder.query_dimensions = 32
         builder.attention_type = "linear"
         transformer = builder.get()
 
@@ -47,6 +48,7 @@ class TestBuilders(unittest.TestCase):
         builder = TransformerEncoderBuilder.from_kwargs(
             n_layers=1,
             n_heads=4,
+            query_dimensions=32,
             attention_type="linear"
         )
 
@@ -72,6 +74,7 @@ class TestBuilders(unittest.TestCase):
         builder = RecurrentEncoderBuilder()
         builder.n_layers = 1
         builder.n_heads = 4
+        builder.query_dimensions = 32
         builder.attention_type = "linear"
         transformer = builder.get()
 
@@ -83,6 +86,7 @@ class TestBuilders(unittest.TestCase):
         builder = TransformerDecoderBuilder()
         builder.n_layers = 1
         builder.n_heads = 4
+        builder.query_dimensions = 32
         builder.self_attention_type = "linear"
         transformer = builder.get()
 
@@ -98,6 +102,7 @@ class TestBuilders(unittest.TestCase):
         builder = RecurrentDecoderBuilder()
         builder.n_layers = 1
         builder.n_heads = 4
+        builder.query_dimensions = 32
         builder.self_attention_type = "linear"
         transformer = builder.get()
 

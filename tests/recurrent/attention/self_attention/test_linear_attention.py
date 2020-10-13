@@ -33,7 +33,7 @@ class TestRecurrentLinearAttention(unittest.TestCase):
         ]
 
         # Test the attention module
-        att = RecurrentLinearAttention()
+        att = RecurrentLinearAttention(E)
         v_new, mem_new = att(q, k, v)
         self.assertEqual(v_new.shape, (N, H, M))
         self.assertEqual(len(mem_new), 2)
@@ -64,8 +64,8 @@ class TestRecurrentLinearAttention(unittest.TestCase):
         m1 = TriangularCausalMask(L)
         m2 = LengthMask(torch.full((N,), L, dtype=torch.long))
         m3 = LengthMask(torch.full((N,), L, dtype=torch.long))
-        att = CausalLinearAttention()
-        rec_att = RecurrentLinearAttention()
+        att = CausalLinearAttention(E)
+        rec_att = RecurrentLinearAttention(E)
         att.eval()
         rec_att.eval()
 
@@ -90,7 +90,7 @@ class TestRecurrentLinearAttention(unittest.TestCase):
         k = torch.rand(N, H, E)
         v = torch.rand(N, H, M)
         memory = None
-        att = RecurrentLinearAttention()
+        att = RecurrentLinearAttention(E)
 
         start = time.time()
         for i in range(100):
@@ -111,7 +111,7 @@ class TestRecurrentLinearAttention(unittest.TestCase):
         k = torch.rand(N, H, E).cuda()
         v = torch.rand(N, H, M).cuda()
         memory = None
-        att = RecurrentLinearAttention()
+        att = RecurrentLinearAttention(E)
 
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)

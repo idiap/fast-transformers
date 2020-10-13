@@ -9,14 +9,11 @@
 import torch
 from torch.nn import Module
 
-from ..attention_registry import AttentionRegistry, Optional, Callable, \
+from ..attention_registry import AttentionRegistry, Optional, Callable, Int, \
     EventDispatcherInstance
 from ..events import EventDispatcher
-from ..causal_product import causal_dot_product 
-
-
-def elu_feature_map(x):
-    return torch.nn.functional.elu(x) + 1
+from ..causal_product import causal_dot_product
+from ..feature_maps import elu_feature_map
 
 
 def causal_linear(Q, K, V):
@@ -47,9 +44,13 @@ class CausalLinearAttention(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, feature_map=None, eps=1e-6, event_dispatcher=""):
+    def __init__(self, query_dimensions, feature_map=None, eps=1e-6,
+                 event_dispatcher=""):
         super(CausalLinearAttention, self).__init__()
-        self.feature_map = feature_map or elu_feature_map
+        self.feature_map = (
+            feature_map(query_dimensions) if feature_map else
+            elu_feature_map(query_dimensions)
+        )
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
@@ -70,8 +71,9 @@ class CausalLinearAttention(Module):
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
         # Apply the feature map to the queries and keys
-        Q = self.feature_map(queries)
-        K = self.feature_map(keys)
+        self.feature_map.new_feature_map()
+        Q = self.feature_map.forward_queries(queries)
+        K = self.feature_map.forward_keys(keys)
 
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask
@@ -107,6 +109,7 @@ class CausalLinearAttention(Module):
 AttentionRegistry.register(
     "causal-linear", CausalLinearAttention,
     [
+        ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
         ("event_dispatcher", Optional(EventDispatcherInstance, ""))
     ]
