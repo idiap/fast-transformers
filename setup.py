@@ -13,8 +13,17 @@ from os import path
 from setuptools import find_packages, setup
 from subprocess import DEVNULL, call
 
-import torch
-from torch.utils.cpp_extension import BuildExtension, CppExtension
+try:
+    import torch
+    from torch.utils.cpp_extension import BuildExtension, CppExtension
+except ImportError as e:
+    raise ImportError(
+        ("PyTorch is required to install pytorch-fast-transformers. Please "
+         "install your favorite version of PyTorch, we support 1.3.1, 1.5.0 "
+         "and >=1.6"),
+        name=e.name,
+        path=e.path
+    ) from e
 
 
 @lru_cache(None)

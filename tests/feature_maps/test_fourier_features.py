@@ -38,7 +38,7 @@ class TestFourierFeatures(unittest.TestCase):
             rbf_xy_hat = phi_x.matmul(phi_y.t())
 
             self.assertLess(
-                torch.square(rbf_xy - rbf_xy_hat).mean().item(),
+                ((rbf_xy - rbf_xy_hat)**2).mean().item(),
                 1e-4
             )
 
@@ -52,7 +52,7 @@ class TestFourierFeatures(unittest.TestCase):
             rbf_xy_hat = phi_x.matmul(phi_y.t())
 
             self.assertLess(
-                torch.square(rbf_xy - rbf_xy_hat).mean().item(),
+                ((rbf_xy - rbf_xy_hat)**2).mean().item(),
                 1e-4
             )
 
@@ -71,7 +71,7 @@ class TestFourierFeatures(unittest.TestCase):
             sm_xy_hat = phi_x.mm(phi_y.t())
 
             self.assertLess(
-                torch.square(sm_xy - sm_xy_hat).mean().item(),
+                ((sm_xy - sm_xy_hat)**2).mean().item(),
                 1e-3
             )
 
