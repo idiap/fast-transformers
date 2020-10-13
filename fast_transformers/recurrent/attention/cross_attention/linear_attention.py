@@ -47,13 +47,13 @@ class RecurrentCrossLinearAttention(Module):
             self.feature_map.new_feature_map()
 
         # Compute the feature representation of the query
-        Q = self.feature_map(query)
+        Q = self.feature_map.forward_queries(query)
 
         # If the state is not given compute the key-value matrix and the
         # normalizers, namely compute whatever is needed in order to attend to
         # keys and values with a given query.
         if state is None:
-            K = self.feature_map(keys)
+            K = self.feature_map.forward_keys(keys)
             K = K * key_lengths.float_matrix[:, :, None, None]
             S = torch.einsum("nshd,nshm->nhmd", K, values)
             Z = K.sum(dim=1)

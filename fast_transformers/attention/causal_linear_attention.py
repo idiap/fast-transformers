@@ -72,8 +72,8 @@ class CausalLinearAttention(Module):
                 key_lengths):
         # Apply the feature map to the queries and keys
         self.feature_map.new_feature_map()
-        Q = self.feature_map(queries)
-        K = self.feature_map(keys)
+        Q = self.feature_map.forward_queries(queries)
+        K = self.feature_map.forward_keys(keys)
 
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask

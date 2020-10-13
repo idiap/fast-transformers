@@ -27,12 +27,18 @@ class FeatureMap(Module):
         random feature map sample new parameters."""
         raise NotImplementedError()
 
-    def forward(self, x):
-        """Encode x using this feature map.
+    def forward_queries(self, x):
+        """Encode the queries `x` using this feature map."""
+        return self(x)
 
-        NOTE: x can have any shape but the last dimension should be the one
-              that is encoded.
-        """
+    def forward_keys(self, x):
+        """Encode the keys `x` using this feature map."""
+        return self(x)
+
+    def forward(self, x):
+        """Encode x using this feature map. For symmetric feature maps it
+        suffices to define this function, but for asymmetric feature maps one
+        needs to define the `forward_queries` and `forward_keys` functions."""
         raise NotImplementedError()
 
 

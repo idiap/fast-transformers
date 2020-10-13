@@ -5,9 +5,11 @@
 
 """Implement the positive orthogonal random features from the paper
 "Rethinking Attention with Performers" https://arxiv.org/pdf/2009.14794.pdf
+and the traditional random Fourier features that approximate the RBF kernel.
 """
 
 from math import sqrt, log
+import warnings
 
 import torch
 
@@ -15,6 +17,17 @@ from .base import FeatureMap
 
 
 def orthogonal_random_matrix_(w):
+    """Initialize the matrix w in-place to compute orthogonal random features.
+
+    The matrix is initialized such that its columns are orthogonal to each
+    other (in groups of size `rows`) and their norms is drawn from the
+    chi-square distribution with `rows` degrees of freedom (namely the norm of
+    a `rows`-dimensional vector distributed as N(0, I)).
+
+    Arguments
+    ---------
+        w: float tensor of size (rows, columns)
+    """
     rows, columns = w.shape
     start = 0
     while start < columns:
@@ -104,6 +117,23 @@ class Favor(RandomFourierFeatures):
                                     orthogonal=orthogonal)
         self.stabilize = stabilize
 
+    def _check_sequence_length(self, x):
+        """Check that the 2nd dimension is larger than the 3rd as a heuristic
+        that the sequence length will be larger than the number of heads. If
+        not simply warn of a possible bug."""
+        if len(x.shape) != 4:
+            warnings.warn(("Favor.stabilize is set to True but the input "
+                           "feature does not have the shape (N, L, H, D) "
+                           "which may result in unexpected behaviour"))
+
+        if x.shape[1] < x.shape[2]:
+            warnings.warn(("Favor.stabilize is set to True but the 2nd "
+                           "dimension of the input is smaller than the 3rd "
+                           "which could indicate that the sequence length and "
+                           "the heads are flipped. This may result in incorrect "
+                           "behaviour. The shape of the input is "
+                           "{!r}.").format(x.shape))
+
     def forward(self, x):
         x = x * sqrt(self.softmax_temp)
         norm_x_squared = torch.einsum("...d,...d->...", x, x).unsqueeze(-1)
@@ -113,8 +143,17 @@ class Favor(RandomFourierFeatures):
         # in logspace. In particular, we multiply with exp(-norm_x_squared/2)
         # and 1/sqrt(self.n_dims)
         offset = norm_x_squared * 0.5 + 0.5 * log(self.n_dims)
+
+        # If stabilize is True then add the max norm per sequence in order to
+        # ensure that exp_u1 and exp_u2 will be <1.
+        #
+        # NOTE: This is the only part of this feature map that assumes the
+        #       2nd dimension is the sequence length. We call the
+        #       _check_sequence_length dimension function to be able to catch
+        #       some possible bugs ahead of time.
         if self.stabilize:
-            offset = offset + norm_x_squared.max()
+            self._check_sequence_length(norm_x_squared)
+            offset = offset + norm_x_squared.max(1, keepdim=True)[0]
 
         exp_u1 = torch.exp(u - offset)
         exp_u2 = torch.exp(-u - offset)

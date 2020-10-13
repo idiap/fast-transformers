@@ -53,8 +53,8 @@ class RecurrentLinearAttention(Module):
             self.feature_map.new_feature_map()
 
         # Apply the feature map to the query and key
-        Q = self.feature_map(query)
-        K = self.feature_map(key)
+        Q = self.feature_map.forward_queries(query)
+        K = self.feature_map.forward_keys(key)
 
         # Extract some shapes
         N, H, D = Q.shape
