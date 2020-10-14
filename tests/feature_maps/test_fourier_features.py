@@ -20,7 +20,7 @@ class TestFourierFeatures(unittest.TestCase):
             torch.abs(
                 f.omega.t().matmul(f.omega)[torch.eye(32) == 0]
             ).max().item(),
-            1e-5
+            1e-4
         )
 
     def test_rff(self):
