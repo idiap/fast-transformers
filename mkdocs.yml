@@ -8,6 +8,7 @@ extra_css:
 markdown_extensions:
     - mdx_math
     - tables
+    - admonition
 nav:
     - Home: index.md
     - Transformers: transformers.md
@@ -18,4 +19,5 @@ nav:
     - Custom Attention Layer: custom_attention_layer.md
     - Recurrent Transformers: recurrent_transformers.md
     - Events: events.md
+    - Tips and Tricks: tips_and_tricks.md
     - API Docs: /api_docs/fast_transformers/
