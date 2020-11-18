@@ -96,7 +96,7 @@ void assign(
             for (int h=0; h<H; h++) {
                 int64_t hash = hash_a[n][h][l];
                 int mind = 1000;
-                int assignment = -1;
+                int assignment = K+1;
                 for (int k=0; k<K; k++) {
                     int d = popcnt(hash ^ centroid_a[n][h][k]);
                     if (d < mind) {
@@ -242,9 +242,10 @@ void cluster(
     int iterations,
     int bits
 ) {
+    int K = centroids.size(2);
     // Initialize the centroids and the assignments
     initialize(hashes, centroids);
-    clusters.fill_(-1);
+    clusters.fill_(K+1);
 
     // Perform iterations of Lloyd's algorithm
     for (int i=1; i<iterations; i++) {

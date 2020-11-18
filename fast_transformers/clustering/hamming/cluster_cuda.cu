@@ -86,9 +86,9 @@ void assign_clusters_kernel(
         return;
     }
 
-    // Beyond the sequence length set the cluster label to -1
+    // Beyond the sequence length set the cluster label to (K+1) where K is the clusters
     if(l >= lengths[n]) {
-        labels[n][h][l] = -1;
+        labels[n][h][l] = K+1;
         distances[n][h][l] = -1;
         return;
     }
@@ -141,6 +141,7 @@ void bit_count_kernel(
     const int N = labels.size(0);
     const int H = labels.size(1);
     const int L = labels.size(2);
+    const int K = counts.size(2);
     const int B = cluster_bit_counts.size(3);
 
     const int hl = H*L;
@@ -156,7 +157,7 @@ void bit_count_kernel(
     const int64_t x = hash_codes[n][h][l];
     int val_to_add = -1;
     const int best_cluster = labels[n][h][l];
-    if(best_cluster == -1) {
+    if(best_cluster == (K+1)) {
         return;
     }
 
