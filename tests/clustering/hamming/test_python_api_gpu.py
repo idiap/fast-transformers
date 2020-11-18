@@ -45,6 +45,7 @@ def get_hamming_distances(data, closest_clusters, n_buckets):
 
 
 def labels_to_centroids(labels, centroids):
+    labels[labels == (centroids.shape[-1] + 1)] = -1
     res = [list(map(c.__getitem__, l)) for c,l in zip(centroids,labels)]
     return np.asarray(res)
 
