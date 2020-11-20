@@ -3,6 +3,8 @@
 // Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
 // Apoorv Vyas <avyas@idiap.ch>
 //
+// Updated by: Apoorv Vyas (20/l1/2020)
+
 
 #include <cooperative_groups.h>
 #include <torch/extension.h>
@@ -14,178 +16,139 @@ typedef torch::PackedTensorAccessor32<int64_t, 4, torch::RestrictPtrTraits> int6
 typedef torch::PackedTensorAccessor32<int64_t, 3, torch::RestrictPtrTraits> int64_accessor_3d;
 typedef torch::PackedTensorAccessor32<int, 4, torch::RestrictPtrTraits> int32_accessor_4d;
 typedef torch::PackedTensorAccessor32<int, 3, torch::RestrictPtrTraits> int32_accessor_3d;
+typedef torch::PackedTensorAccessor32<int, 2, torch::RestrictPtrTraits> int32_accessor_2d;
+typedef torch::PackedTensorAccessor32<int, 1, torch::RestrictPtrTraits> int32_accessor_1d;
+
+#define EPB 16
+#define QPB 16
+#define KPB 16
 
 
-
-inline __device__ float dot(const float *a, const float *b, int n) {
-    float s = 0;
-    for (int i=0; i<n; i++) {
-        s += (*a) * (*b);
-        a++;
-        b++;
-    }
-    return s;
-}
-
-
-inline __device__ void add_scaled(float *a, const float *b, float s, int n) {
-    for (int i=0; i<n; i++) {
-        atomicAdd(a, s * (*b));
-        a++;
-        b++;
-    }
-}
-
-
+/*
+   The idea is to follow GEMM like CUDA implementation.
+   We assume the Query matrix is re-arranged such that
+   first block of queries corresponds to the first cluster,
+   next to the next set of clusters and so on.
+   Each block only operates on single cluster.
+   We implement the rest of the kernel similar to this
+   https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#shared-memory
+*/
 __global__ void clustered_sparse_dot_product_kernel(
-    const float *queries,
-    const float *keys,
-    const int64_t *topk,
-    const int *sequence_length,
-    const int* block_map,
-    const int* query_map,
-    const int64_t* sorted_group_idx,
-    float *products,
-    int N,
-    int H,
-    int L,
-    int E,
-    int k,
-    int S,
-    int C,
-    int blocks_per_sequence,
-    int queries_per_block
+    const float_accessor_4d queries,
+    const float_accessor_4d keys,
+    const int32_accessor_4d topk,
+    const int32_accessor_2d indx_maps,
+    const int32_accessor_3d q_start_indx,
+    const int32_accessor_3d q_end_indx,
+    float_accessor_4d product
 ) {
+    int E = queries.size(3);
+    int K = topk.size(3);
+    
     extern __shared__ float shared_mem[];
-    float* shared_keys = shared_mem;
-    float* shared_queries = shared_mem + k*E;
-    // Getting the cluster id for the current block
-    // block_map stores the information about the 
-    // cluster index that current block needs to operate on
-    int cluster_idx = block_map[blockIdx.x];
-    int n = (blockIdx.x / blocks_per_sequence) / H;
-    int h = (blockIdx.x / blocks_per_sequence) % H;
-    if (cluster_idx == -1) {
-        return; 
-    }
+    float* shared_queries = shared_mem;
+    float* shared_keys = shared_queries + (EPB*QPB);
+    float* shared_topk = shared_keys + (EPB*KPB);
 
-    if ((threadIdx.x < k)) {
-        // Load the keys into the shared memory
-        int topk_idx = threadIdx.x;
-        int k_idx = topk[n*H*C*k + h*C*k + cluster_idx*k + topk_idx];
-        const float* k_ptr = keys + (n*H*S*E + h*S*E + k_idx*E);
-        float* s_ptr = shared_keys + topk_idx; 
-        for (int i=0; i<E; i++) {
-            *s_ptr = *k_ptr;
-            s_ptr += k;
-            k_ptr++;
+    int n = indx_maps[blockIdx.x][0];
+    int h = indx_maps[blockIdx.x][1];
+    int c = indx_maps[blockIdx.x][2];
+    int l_end = q_end_indx[n][h][c];
+
+    if ((threadIdx.x == 0)) {
+        if ((threadIdx.y + (blockIdx.y * KPB)) < K) {
+            shared_topk[threadIdx.y] = topk[n][h][c][threadIdx.y + (blockIdx.y * KPB)];
         }
-    }
-
-    if ((threadIdx.x >= k) && (threadIdx.x < (k + queries_per_block))) {
-        // Load the queries into the shared memory
-        int l_idx = query_map[blockIdx.x] + (threadIdx.x - k);
-        // This condition ensures we only load the queries
-        // for the right cluster
-        if (l_idx < query_map[blockIdx.x + 1]) {
-            int l = sorted_group_idx[n*H*L + h*L + l_idx];
-            if (l < sequence_length[n]) {
-                const float* q_ptr = queries + (n*H*L*E + h*L*E + l*E);
-                float* s_ptr = shared_mem + threadIdx.x*E; 
-                for (int i=0; i<E; i++) {
-                    *s_ptr = *q_ptr;
-                    s_ptr++;
-                    q_ptr++;
-                }
-            }
+        else {
+            shared_topk[threadIdx.y] = -1;
         }
     }
     __syncthreads();
-    int q_local_idx = threadIdx.x / k;
-    int k_local_idx = threadIdx.x % k;
-    // query_map stores the index of the starting query to be
-    // processed by the current block
-    int l_idx = query_map[blockIdx.x] + q_local_idx;
-    if (l_idx >= query_map[blockIdx.x + 1]) {
-        return;
+  
+    float res = 0.0;
+    int rq_indx = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * QPB)  + threadIdx.x;
+    int rk_indx = shared_topk[threadIdx.y];
+    int cq_indx = threadIdx.y;
+    int ck_indx = threadIdx.x;
+    for (int m=0; m<((E + EPB - 1)/EPB); m++) {
+        cq_indx = m*EPB + threadIdx.y;
+        ck_indx = m*EPB + threadIdx.x;
+        if ((rq_indx < l_end) && (cq_indx < E)) {
+            shared_queries[threadIdx.x + (QPB * threadIdx.y)] = queries[n][h][rq_indx][cq_indx];
+        }
+        else {
+            shared_queries[threadIdx.x + (QPB * threadIdx.y)] = 0;
+        }
+        if ((rk_indx > -1) && (ck_indx) < E) {
+            shared_keys[threadIdx.y + (KPB * threadIdx.x)] = keys[n][h][rk_indx][ck_indx];
+        }
+        else{
+            shared_keys[threadIdx.y + (KPB * threadIdx.x)] = 0; 
+        }
+        __syncthreads();
+        for (int e=0; e<EPB; e++) {
+            res += shared_queries[threadIdx.x + (EPB * e)] * shared_keys[threadIdx.y + (EPB * e)];
+        }
+        __syncthreads();
     }
-    int l = sorted_group_idx[n*H*L + h*L + l_idx];
-    if (l >= sequence_length[n]) {
-        return;
+    if ((rq_indx < l_end) && ((threadIdx.y + (blockIdx.y * KPB)) < K)) {
+        product[n][h][rq_indx][threadIdx.y + (blockIdx.y * KPB)] = res;
     }
-    
-    float s = 0;
-    float* k_ptr = shared_keys + k_local_idx;
-    float* q_ptr = shared_queries + q_local_idx*E;
-    for (int i=0; i<E; i++) {
-        s += (*k_ptr) * (*q_ptr);
-        k_ptr += k;
-        q_ptr++;
-    }
-
-    // printf("q_indx:%d, k_indx:%d, l:%d, dp:%f\n", q_local_idx, k_local_idx, l, s);
-    products[n*H*L*k + h*L*k + l*k + k_local_idx] = s;
 }
 
+
+/*
+   Since all of our kernels are implemented to work
+   on a single cluster at a time.
+   This simply creates a bunch of mappings for us
+   to know which blockId operates on which cluster, sequenceid,
+   head and the starting query id
+*/
 __global__ void create_maps_kernel(
-    const int* cluster_counts,
-    int* block_map,
-    int* query_map,
-    const int N,
-    const int H,
-    const int C,
-    const int blocks_per_sequence,
-    const int queries_per_block
+    const int32_accessor_3d block_counts,
+    const int32_accessor_3d block_counts_cumsum,
+    const int n_block_per_query,
+    int32_accessor_2d indx_maps
 ) {
+    int N = block_counts.size(0);
+    int H = block_counts.size(1);
+    int C = block_counts.size(2);
+
     int full_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int n = full_idx / H;
-    int h = full_idx % H;
+    int n = full_idx / (H*C);
+    int h = (full_idx - n*H*C) / C;
+    int c = full_idx % C;
     if (n >= N) {
         return;
     }
-    int* block = block_map + (full_idx * blocks_per_sequence);
-    int* q_block = query_map + (full_idx * blocks_per_sequence);
-    const int* counts = cluster_counts + (full_idx * C);
-    int idx = 0;
-    int total_q_count = 0;
-
-    for (int i=C-1; i>=0; i--) {
-    //for (int i=0; i<C; i++) {
-        int q_count = 0;
-        while (q_count < counts[i] - queries_per_block) {
-            block[idx] = i;
-            q_block[idx] = total_q_count;
-            total_q_count += queries_per_block;
-            q_count += queries_per_block;
-            idx++;
-        }
-        int left_over_queries = counts[i] - q_count;
-        if (left_over_queries != 0) {
-            block[idx] = i;
-            q_block[idx] = total_q_count;
-            total_q_count += left_over_queries;
-            idx++;
-        }
+    int indx = block_counts_cumsum[n][h][c];
+    int blocks = block_counts[n][h][c];
+    indx -= blocks;
+    for (int b=0; b<blocks; b++) {
+        indx_maps[indx][0] = n;
+        indx_maps[indx][1] = h;
+        indx_maps[indx][2] = c;
+        indx_maps[indx][3] = int(b / n_block_per_query);
+        indx += 1;
     }
 }
-// Each block loads operates on a single cluster
-// We load the k-keys in the shared memory
-// A maximum of 192 keys with 64 dimension can be loaded
-// for a shared memory of 48KB
-// Each block also loads the queries into the shared memory
-// to compute dot products
-// Each thread in a block computes one dot-product
-// So the number of threads should be $K*N_queries$
 
+
+/*
+   Sparse dot-product between Queries and Keys.
+   The keys to multiplied are defined by the top-k
+   matrix
+*/
 void clustered_sparse_dot_product(
     const torch::Tensor Q,
     const torch::Tensor K,
     const torch::Tensor topk,
-    const torch::Tensor lengths,
-    const torch::Tensor block_map,
-    const torch::Tensor query_map,
-    const torch::Tensor cluster_counts,
-    const torch::Tensor sorted_group_indices,
+    const torch::Tensor q_start_indx,
+    const torch::Tensor q_end_indx,
+    const torch::Tensor block_counts,
+    const torch::Tensor block_counts_cumsum,
+    const int total_blocks,
+    torch::Tensor indx_maps,
     torch::Tensor product
 ) {
     
@@ -197,96 +160,114 @@ void clustered_sparse_dot_product(
     int C = topk.size(2);
     int S = K.size(2);
 
-    float* queries_p = Q.data_ptr<float>();
-    float* keys_p = K.data_ptr<float>();
-    int64_t* topk_p = topk.data_ptr<int64_t>();
-    int* lengths_p = lengths.data_ptr<int>();
-    float* product_p = product.data_ptr<float>();
-    int* block_map_p = block_map.data_ptr<int>();
-    int* query_map_p = query_map.data_ptr<int>();
-    int* cluster_counts_p = cluster_counts.data_ptr<int>();
-    int64_t* sorted_group_indices_p = sorted_group_indices.data_ptr<int64_t>();
+    int threads = 1024;
+    int blocks = ((N*H*C) + threads - 1) / threads;
+    create_maps_kernel<<<blocks, threads>>>(
+        block_counts.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        block_counts_cumsum.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        1,
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>()
+    );
 
-    int max_threads = 1024;
-    int queries_per_block = (max_threads / k) < L ? (max_threads / k):L;
-    int threads = queries_per_block * k;
-    int blocks_per_sequence = ((L*k)/threads) + C + 1;
-
-    int blocks_map = ((N*H) + max_threads - 1)/max_threads;
-    create_maps_kernel<<<blocks_map, max_threads>>>(
-        cluster_counts_p,
-        block_map_p,
-        query_map_p,
-        N,
-        H,
-        C,
-        blocks_per_sequence,
-        queries_per_block
-    ); 
-
-    const int blocks = blocks_per_sequence * N * H;
-    const int shared_mem_queries = (queries_per_block + k) * E * sizeof(float);
-    clustered_sparse_dot_product_kernel<<<blocks, threads,
-                                          shared_mem_queries>>>(
-        queries_p,
-        keys_p,
-        topk_p,
-        lengths_p,
-        block_map_p,
-        query_map_p,
-        sorted_group_indices_p,
-        product_p,
-        N,
-        H,
-        L,
-        E,
-        k,
-        S,
-        C,
-        blocks_per_sequence,
-        queries_per_block
+    dim3 dimBlock(QPB, KPB);
+    
+    dim3 dimGrid(total_blocks, (k + KPB - 1)/KPB);
+    const int shared_mem = (((KPB + QPB) * EPB) + KPB) * sizeof(float);
+    clustered_sparse_dot_product_kernel<<<dimGrid, dimBlock, shared_mem>>>(
+        Q.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        K.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        topk.packed_accessor32<int, 4, torch::RestrictPtrTraits>(),
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>(),
+        q_start_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        q_end_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        product.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
     );
 }
 
 
-__global__ void clustered_sparse_dot_backward_kernel(
+/*
+   Once again each block works for a single cluster
+   Each thread sums over all the responsible keys (in chunks)
+*/
+__global__ void clustered_sparse_dot_queries_backward_kernel(
+    const float_accessor_4d grad_out,
     const float_accessor_4d queries,
     const float_accessor_4d keys,
-    const int32_accessor_3d groups,
-    const int64_accessor_4d topk,
-    const float_accessor_4d grad_out,
+    const int32_accessor_4d topk,
+    const int32_accessor_2d indx_maps,
+    const int32_accessor_3d q_start_indx,
+    const int32_accessor_3d q_end_indx,
     float_accessor_4d grad_q,
     float_accessor_4d grad_k
 ) {
-    const int N = queries.size(0);
-    const int H = queries.size(1);
-    const int L = queries.size(2);
-    const int E = queries.size(3);
-    const int S = keys.size(2);
-    const int k = topk.size(3);
+    int E = grad_q.size(3);
+    int K = topk.size(3);
 
-    int full_index = blockIdx.x * blockDim.x + threadIdx.x;
-    int n = full_index / (H*L*k);
-    int h = (full_index - n*H*L*k) / (L*k);
-    int l = (full_index - n*H*L*k - h*L*k) / k;
-    int j = full_index % k;
+    extern __shared__ float shared_mem[];
+    float* shared_grad = shared_mem;
+    float* shared_keys = shared_grad + (KPB*QPB);
+    float* shared_queries = shared_keys + (EPB*KPB);
+    float* shared_topk = shared_queries + (EPB*QPB);
 
-    const int c = groups[n][h][l]; 
-    if ((n >= N) || (c == -1)) {
-        return;
+    int n = indx_maps[blockIdx.x][0];
+    int h = indx_maps[blockIdx.x][1];
+    int c = indx_maps[blockIdx.x][2];
+    int l_end = q_end_indx[n][h][c];
+    
+    // Load all the top indices for all keys
+    int thread_id = threadIdx.x + (threadIdx.y * blockDim.x);
+    for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
+        shared_topk[t] = topk[n][h][c][t];
     }
+    __syncthreads();
 
-    const int key_index = topk[n][h][c][j];
-    const float grad = grad_out[n][h][l][j];
-    for (int e=0; e<E; e++) {
-        atomicAdd(&grad_q[n][h][l][e], grad * keys[n][h][key_index][e]);
+    float res = 0.0;
+    int rq_indx = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * QPB)  + threadIdx.x;
+    int e_indx = threadIdx.y + (blockIdx.y  * EPB);
+    float res_k = 0.0;
+    for (int kb=0; kb<((K + KPB - 1)/KPB); kb++) {
+        if ((rq_indx < l_end) && (e_indx < E)) {
+            shared_queries[threadIdx.x + (QPB * threadIdx.y)] = queries[n][h][rq_indx][e_indx];
+        }
+        else {
+            shared_queries[threadIdx.x + (QPB * threadIdx.y)] = 0;
+        }
+        int rk_indx = (kb*KPB) + threadIdx.y;
+        if ((rq_indx < l_end) && (rk_indx < K)) {
+            shared_grad[threadIdx.x + (QPB * threadIdx.y)] = grad_out[n][h][rq_indx][rk_indx];
+        }
+        else {
+            shared_grad[threadIdx.x + (QPB * threadIdx.y)] = 0;
+        }
+        rk_indx = kb*KPB + threadIdx.x;
+        if ((rk_indx <  K) && (e_indx < E)){
+            shared_keys[threadIdx.x + (KPB * threadIdx.y)] = keys[n][h][shared_topk[rk_indx]][e_indx];
+        }
+        else{
+            shared_keys[threadIdx.x + (KPB * threadIdx.y)] = 0; 
+        }
+        __syncthreads();
+        for (int k=0; k<KPB; k++) {
+            res += shared_grad[threadIdx.x + (QPB * k)] * shared_keys[k + (threadIdx.y * KPB)];
+        }
+        res_k = 0.0;
+        if ((rk_indx < K) && (e_indx < E)) {
+            for (int q=0; q<QPB; q++) {
+                res_k += (shared_queries[q + (threadIdx.y * QPB)] * shared_grad[q + (threadIdx.x * QPB)]);
+            }
+            atomicAdd(&grad_k[n][h][shared_topk[rk_indx]][e_indx], res_k);
+        }
+        __syncthreads();
     }
-    for (int e=0; e<E; e++) {
-        atomicAdd(&grad_k[n][h][key_index][e], grad * queries[n][h][l][e]);
+    if ((rq_indx < l_end) && (e_indx < E)) {
+        grad_q[n][h][rq_indx][e_indx] = res;
     }
 }
 
 
+/*
+   Sparse dot product backward pass.
+ */
 void clustered_sparse_dot_backward(
     const torch::Tensor Q,
     const torch::Tensor K,
@@ -294,24 +275,45 @@ void clustered_sparse_dot_backward(
     const torch::Tensor topk,
     const torch::Tensor grad_out,
     torch::Tensor grad_Q,
-    torch::Tensor grad_K
+    torch::Tensor grad_K,
+    const torch::Tensor q_start_indx,
+    const torch::Tensor q_end_indx,
+    const torch::Tensor block_counts,
+    const torch::Tensor block_counts_cumsum,
+    const int total_blocks,
+    torch::Tensor indx_maps
 ) {
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
     int E = Q.size(3);
+    int C = topk.size(2);
     int k = topk.size(3);
     int S = K.size(2);
 
     int threads = 1024;
-    int blocks = (N*H*L*k + threads - 1) / threads;
-    
-    clustered_sparse_dot_backward_kernel<<<blocks, threads>>>(
+    int blocks = ((N*H*C) + threads - 1) / threads;
+    create_maps_kernel<<<blocks, threads>>>(
+        block_counts.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        block_counts_cumsum.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        1,
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>()
+    );
+
+    dim3 dimBlock(QPB, EPB);
+    dim3 dimGrid(total_blocks, (E + EPB - 1)/EPB);
+    const int mem_grad = QPB * KPB;
+    const int mem_keys = KPB * EPB;
+    const int mem_queries = QPB * EPB;
+    const int shared_mem = (mem_grad + mem_queries + mem_keys + k) * sizeof(float);
+    clustered_sparse_dot_queries_backward_kernel<<<dimGrid, dimBlock, shared_mem>>>(
+        grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         Q.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         K.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-        groups.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
-        topk.packed_accessor32<int64_t, 4, torch::RestrictPtrTraits>(),
-        grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        topk.packed_accessor32<int, 4, torch::RestrictPtrTraits>(),
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>(),
+        q_start_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        q_end_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
         grad_Q.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
         grad_K.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
     );
@@ -321,192 +323,251 @@ void clustered_sparse_dot_backward(
 __global__ void clustered_sparse_weighted_average_kernel(
     const float_accessor_4d weights,
     const float_accessor_4d values,
-    const int32_accessor_3d groups,
-    const int64_accessor_4d topk,
-    float_accessor_4d output,
-    int N,
-    int H,
-    int L,
-    int E,
-    int k,
-    int n_dim_per_thread
+    const int32_accessor_4d topk,
+    const int32_accessor_2d indx_maps,
+    const int32_accessor_3d q_start_indx,
+    const int32_accessor_3d q_end_indx,
+    float_accessor_4d output
+
 ) {
+    int E = output.size(3);
+    int K = topk.size(3);
     extern __shared__ float shared_mem[];
-    int block_idx = blockIdx.x;
-    if ((block_idx > N*H*L)){
-        return; 
-    }
+    float* shared_weights = shared_mem;
+    float* shared_values = shared_weights + (KPB*QPB);
+    float* shared_topk = shared_values + (EPB*KPB);
 
-    int n = (block_idx) / (H*L);
-    int h = (block_idx - n*H*L) / (L);
-    int l = block_idx  % L;
-    int c = groups[n][h][l];
-    if (c == -1) {
-        return;
-    }
-    if ((threadIdx.x < k)) {
-        shared_mem[k*E + threadIdx.x] = weights[n][h][l][threadIdx.x]; 
-        shared_mem[(k*(E+1)) +  threadIdx.x] = topk[n][h][c][threadIdx.x]; 
-    }
-
-    __syncthreads();
+    int n = indx_maps[blockIdx.x][0];
+    int h = indx_maps[blockIdx.x][1];
+    int c = indx_maps[blockIdx.x][2];
+    int l_end = q_end_indx[n][h][c];
     
-    if (threadIdx.x < k) {
-        int n_threads_per_key  = E / n_dim_per_thread;
-        int j = threadIdx.x / n_threads_per_key ;
-        int d_start = (threadIdx.x - j*n_threads_per_key) * n_dim_per_thread; 
-
-        int key_idx = int(shared_mem[(k*(E+1)) + j]);
-        const float s = shared_mem[k*E + j];
-
-        for(int i=0; i<n_dim_per_thread; i++) {
-            int cur_d = d_start + i;
-            float v = values[n][h][key_idx][cur_d];
-            shared_mem[j + (cur_d * k)] =  v * s;
-        }
+    // Load all the top indices for all keys
+    int thread_id = threadIdx.x + threadIdx.y * blockDim.x;
+    for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
+        shared_topk[t] = topk[n][h][c][t];
     }
     __syncthreads();
 
-    if ((threadIdx.x < E)) {
-        float sum = 0;
-        int start = threadIdx.x*k;
-        for (int i=start; i<start+k; i++) {
-            sum = sum + shared_mem[i]; 
+    float res = 0.0;
+    int rq_indx = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * QPB)  + threadIdx.x;
+    int e_indx = threadIdx.y + (blockIdx.y  * EPB);
+    for (int kb=0; kb<((K + KPB - 1)/KPB); kb++) {
+        int rk_indx = kb*KPB + threadIdx.y;
+        if ((rq_indx < l_end) && (rk_indx < K)) {
+            shared_weights[threadIdx.x + (QPB * threadIdx.y)] = weights[n][h][rq_indx][rk_indx];
         }
-        output[n][h][l][threadIdx.x] = sum;
+        else {
+            shared_weights[threadIdx.x + (QPB * threadIdx.y)] = 0;
+        }
+        rk_indx = kb*KPB + threadIdx.x;
+        if ((rk_indx <  K) && (e_indx < E)){
+            shared_values[threadIdx.x + (KPB * threadIdx.y)] = values[n][h][shared_topk[rk_indx]][e_indx];
+        }
+        else{
+            shared_values[threadIdx.x + (KPB * threadIdx.y)] = 0; 
+        }
+        __syncthreads();
+        for (int k=0; k<KPB; k++) {
+            res += shared_weights[threadIdx.x + (QPB * k)] * shared_values[k + (threadIdx.y * KPB)];
+        }
+        __syncthreads();
     }
+    if ((rq_indx < l_end) && (e_indx < E)) {
+        output[n][h][rq_indx][e_indx] = res;
+    }
+    
 }
 
+
+/*
+   Weighted average of the "values" with attention weight
+   stored in the "weights". The values to be selected are
+   defined by the "topk"
+ */
 void clustered_sparse_weighted_average(
     const torch::Tensor weights,
     const torch::Tensor values,
-    const torch::Tensor groups,
     const torch::Tensor topk,
-    torch::Tensor output
+    torch::Tensor output,
+    const torch::Tensor q_start_indx,
+    const torch::Tensor q_end_indx,
+    const torch::Tensor block_counts,
+    const torch::Tensor block_counts_cumsum,
+    const int total_blocks,
+    torch::Tensor indx_maps
 ) {
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);
-    int k = weights.size(3);
+    int C = topk.size(2);
+    int k = topk.size(3);
+    int S = values.size(2);
     int E = values.size(3);
 
-    
-    auto weights_a = weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto values_a = values.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto groups_a = groups.packed_accessor32<int, 3, torch::RestrictPtrTraits>();
-    auto topk_a = topk.packed_accessor32<int64_t, 4, torch::RestrictPtrTraits>();
-    auto output_a = output.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    //float* output_p = output.data_ptr<float>();
+    int threads = 1024;
+    int blocks = ((N*H*C) + threads - 1) / threads;
+    create_maps_kernel<<<blocks, threads>>>(
+        block_counts.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        block_counts_cumsum.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        1,
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>()
+    );
 
-    int max_threads = 1024;
-    int n_dim_per_thread = E;
-    // We need at least E threads for the final reduction
-    int threads = ceil((E * k)/n_dim_per_thread) > E ? ceil((E * k)/n_dim_per_thread):E;
-    int total_products = L*N*H*k;
-    int blocks = ceil(float(total_products)/(k));
-    const int shared_mem = (((k * E) + 2*k)* sizeof(float));
-    clustered_sparse_weighted_average_kernel<<<blocks, threads, shared_mem>>>(
-        weights_a,
-        values_a,
-        groups_a,
-        topk_a,
-        output_a,
-        N,
-        H,
-        L,
-        E,
-        k,
-        n_dim_per_thread
+    dim3 dimBlock(QPB, EPB);
+    dim3 dimGrid(total_blocks, (E + EPB - 1)/EPB);
+    const int mem_weights = QPB * KPB;
+    const int mem_values = KPB * EPB;
+    const int shared_mem = (mem_weights + mem_values + k) * sizeof(float);
+    clustered_sparse_weighted_average_kernel<<<dimGrid, dimBlock, shared_mem>>>(
+        weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        topk.packed_accessor32<int, 4, torch::RestrictPtrTraits>(),
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>(),
+        q_start_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        q_end_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        output.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
     );
 }
 
 
 __global__ void clustered_sparse_weighted_average_backward_kernel(
     const float_accessor_4d weights,
-    const float_accessor_4d values,
-    const int32_accessor_3d groups,
-    const int64_accessor_4d topk,
     const float_accessor_4d grad_out,
-    float_accessor_4d grad_weights,
-    float_accessor_4d grad_values,
-    int N,
-    int H,
-    int L,
-    int E,
-    int k,
-    int dim_per_thread
+    const int32_accessor_4d topk,
+    const int32_accessor_2d indx_maps,
+    const int32_accessor_3d q_start_indx,
+    const int32_accessor_3d q_end_indx,
+    const int q_per_block,
+    float_accessor_4d grad_v
 ) {
-    int full_index = blockIdx.x * blockDim.x + threadIdx.x;
-    int n = full_index / (H*L*k);
-    int h = (full_index - n*H*L*k) / (L*k);
-    int l = (full_index - n*H*L*k - h*L*k) / k;
-    int j = full_index % k;
-    int c = groups[n][h][l]; 
-    if ((n >= N) || (c == -1)) {
-        return;
+    int E = grad_out.size(3);
+    int K = topk.size(3);
+
+    extern __shared__ float shared_mem[];
+    float* shared_grad = shared_mem;
+    float* shared_weights = shared_grad + (EPB*q_per_block);
+    float* shared_topk = shared_weights + (KPB*q_per_block);
+
+    int n = indx_maps[blockIdx.x][0];
+    int h = indx_maps[blockIdx.x][1];
+    int c = indx_maps[blockIdx.x][2];
+    int l_end = q_end_indx[n][h][c];
+    
+    // Load all the top indices
+    int thread_id = threadIdx.x + (threadIdx.y * blockDim.x);
+    for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
+        shared_topk[t] = topk[n][h][c][t];
     }
-    int key_idx = topk[n][h][c][j];
-    int start_dim = threadIdx.y * dim_per_thread;
-    int end_dim = start_dim + dim_per_thread;
-    if (threadIdx.y == 0) {
-        grad_weights[n][h][l][j] = dot(
-            &values[n][h][key_idx][0],
-            &grad_out[n][h][l][0],
-            E
-        );
+    int q_indx;
+    int k_indx;
+    int e_indx;
+    int q_indx_local;
+    int e_indx_local;
+    int q_start = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * q_per_block); 
+
+    for (int t=thread_id; t<(EPB*q_per_block); t+=(blockDim.x*blockDim.y)) {
+        q_indx_local = t / EPB;
+        e_indx_local = t % EPB;
+        q_indx = q_start + q_indx_local;
+        e_indx = e_indx_local + (blockIdx.y * EPB);
+        if ((q_indx < l_end) && (e_indx < E)) {
+            shared_grad[(q_indx_local*EPB) + e_indx_local] = grad_out[n][h][q_indx][e_indx];
+        }
+        else {
+            shared_grad[(q_indx_local*EPB) + e_indx_local] = 0;
+        }
     }
-    add_scaled(
-        &grad_values[n][h][key_idx][start_dim],
-        &grad_out[n][h][l][start_dim],
-        weights[n][h][l][j],
-        dim_per_thread
-    );
+
+    int k_indx_local;
+    for (int t=thread_id; t<(KPB*q_per_block); t+=(blockDim.x*blockDim.y)) {
+        q_indx_local = t / KPB;
+        k_indx_local = t % KPB;
+        q_indx = q_start + q_indx_local;
+        k_indx = k_indx_local + (blockIdx.z * KPB);
+        if ((q_indx < l_end) && (k_indx < K)) {
+            shared_weights[(q_indx_local*KPB) + k_indx_local] = weights[n][h][q_indx][k_indx];
+        }
+        else {
+            shared_weights[(q_indx_local*KPB) + k_indx_local] = 0;
+        }
+    }
+    __syncthreads();
+
+    float res = 0;
+    int k_id = threadIdx.x + (blockIdx.z*KPB);
+    e_indx = (blockIdx.y * EPB) + threadIdx.y;
+    if ((k_id < K) && (e_indx < E)) {
+        k_indx = shared_topk[k_id];
+        for (int t=0; t<q_per_block; t++) {
+            res += shared_grad[(t*EPB) + threadIdx.y] * shared_weights[(t*KPB) + threadIdx.x]; 
+        }
+        atomicAdd(&grad_v[n][h][k_indx][e_indx], res);
+    }
 }
 
 
+/*
+   Sparse weighted average backward pass
+ */
 void clustered_sparse_weighted_average_backward(
     const torch::Tensor weights,
     const torch::Tensor values,
-    const torch::Tensor groups,
     const torch::Tensor topk,
     const torch::Tensor grad_out,
     torch::Tensor grad_weights,
-    torch::Tensor grad_values
+    torch::Tensor grad_values,
+    const torch::Tensor q_start_indx,
+    const torch::Tensor q_end_indx,
+    const torch::Tensor block_counts,
+    const torch::Tensor block_counts_cumsum,
+    const int total_blocks,
+    torch::Tensor indx_maps
 ) {
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);
     int k = weights.size(3);
     int E = values.size(3);
+    int C = topk.size(2);
+    int S = values.size(2);
 
-    auto weights_a = weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto values_a = values.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto groups_a = groups.packed_accessor32<int, 3, torch::RestrictPtrTraits>();
-    auto topk_a = topk.packed_accessor32<int64_t, 4, torch::RestrictPtrTraits>();
-    auto grad_out_a = grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto grad_weights_a = grad_weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    auto grad_values_a = grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>();
-    int threads_x = 256;
-    int threads_y = 4;
-    int dim_per_thread = E / threads_y;
-    dim3 threads(threads_x, threads_y);
-    int blocks = (N*H*L*k + threads_x - 1)/threads_x;
-
-    clustered_sparse_weighted_average_backward_kernel<<<blocks, threads>>>(
-        weights_a,
-        values_a,
-        groups_a,
-        topk_a,
-        grad_out_a,
-        grad_weights_a,
-        grad_values_a,
-        N,
-        H,
-        L,
-        E,
-        k,
-        dim_per_thread
+    int threads = 1024;
+    int blocks = ((N*H*C) + threads - 1) / threads;
+    create_maps_kernel<<<blocks, threads>>>(
+        block_counts.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        block_counts_cumsum.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        1,
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>()
     );
+
+    dim3 dimBlock(QPB, KPB);
+    dim3 dimGrid(total_blocks, (k + KPB - 1)/KPB);
+    const int shared_mem = (((KPB + QPB) * EPB) + KPB) * sizeof(float);
+    clustered_sparse_dot_product_kernel<<<dimGrid, dimBlock, shared_mem>>>(
+        grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+        topk.packed_accessor32<int, 4, torch::RestrictPtrTraits>(),
+        indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>(),
+        q_start_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        q_end_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+        grad_weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
+    );
+
+    dim3 dimBlockV(KPB, EPB);
+    dim3 dimGridV(total_blocks, (E + EPB - 1)/EPB, (k + KPB - 1)/KPB);
+    const int shared_mem_v = (((KPB + EPB) * QPB) + k) * sizeof(float);
+    clustered_sparse_weighted_average_backward_kernel
+        <<<dimGridV, dimBlockV, shared_mem_v>>>(
+            weights.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+            topk.packed_accessor32<int, 4, torch::RestrictPtrTraits>(),
+            indx_maps.packed_accessor32<int, 2, torch::RestrictPtrTraits>(),
+            q_start_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+            q_end_indx.packed_accessor32<int, 3, torch::RestrictPtrTraits>(),
+            QPB,
+            grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>()
+        );
 }
 
 
@@ -532,4 +593,3 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "Compute the gradients for the sparse weighted average."
     );
 }
-

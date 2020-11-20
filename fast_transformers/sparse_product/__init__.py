@@ -161,14 +161,14 @@ class ClusteredSparseDotProduct(torch.autograd.Function):
     @staticmethod
     def forward(ctx, Q, K, topk, groups, counts, lengths):
         # Save the inputs to compute the gradient
-        ctx.save_for_backward(Q, K, topk, groups)
+        ctx.save_for_backward(Q, K, topk, groups, counts)
 
         device = Q.device
         N, H, L, E = Q.shape
         _, _, C, k = topk.shape
 
         # Create the output tensor
-        product = torch.empty((N, H, L, k), device=device)
+        product = torch.zeros((N, H, L, k), device=device)
 
         # Unfortunately the cpu and gpu interfaces are different so
         # the entire call is surrounded by if-else block
@@ -182,44 +182,94 @@ class ClusteredSparseDotProduct(torch.autograd.Function):
             )
 
         else:
-            queries_per_block = min(L, 1024//k) 
-            threads = k * queries_per_block
-            blocks = ((L*k)//threads) + C + 1
-            query_map = torch.ones((N, H, blocks), dtype=torch.int32).cuda() * L 
-            blocks_map = torch.ones((N, H, blocks), dtype=torch.int32).cuda() * -1 
-            _, sorted_group_indices = torch.sort(groups, descending=True, dim=-1)
+            # Allocate bookkeeping parameters to facilitate the kernel
+            with torch.no_grad():
+                Q_pb = 16
+                block_counts = (counts + Q_pb - 1) // Q_pb
+                block_counts = block_counts.int()
+                block_counts_cumsum = block_counts.view(-1).cumsum(-1).view(N, H, C).int()
+                indx_maps = torch.ones(
+                    (block_counts.sum(), 4),
+                    device=Q.device,
+                    dtype=torch.int32
+                )
+                counts_cumsum = counts.cumsum(-1).int()
+                total_blocks = block_counts.sum().item()
 
             # Actually perform the dot product
             ClusteredSparseDotProduct.dot[device.type](
                 Q,
                 K,
-                topk,
-                lengths,
-                blocks_map,
-                query_map,
-                counts,
-                sorted_group_indices,
+                topk.int(),
+                counts_cumsum - counts,
+                counts_cumsum,
+                block_counts,
+                block_counts_cumsum,
+                total_blocks,
+                indx_maps,
                 product
             )
+
         return product
 
     @staticmethod
     def backward(ctx, grad_output):
+        Q, K, topk, groups, counts = ctx.saved_tensors
+        device = Q.device
         # Extract the saved tensors and allocate memory for the gradients
-        Q, K, topk, groups = ctx.saved_tensors
         grad_Q = torch.zeros_like(Q)
         grad_K = torch.zeros_like(K)
-        ClusteredSparseDotProduct.dot_backward[Q.device.type](
-            Q,
-            K,
-            groups,
-            topk,
-            grad_output,
-            grad_Q,
-            grad_K
-        )
 
-        return grad_Q, grad_K, None, None, None, None
+        # Unfortunately the cpu and gpu interfaces are different so
+        # the entire call is surrounded by if-else block
+        if device.type == "cpu":
+            ClusteredSparseDotProduct.dot_backward[Q.device.type](
+                Q,
+                K,
+                groups,
+                topk,
+                grad_output,
+                grad_Q,
+                grad_K
+            )
+
+        else:
+            N, H, L, E = Q.shape
+            _, _, C, k = topk.shape
+            # Allocate bookkeeping parameters to facilitate the kernel
+            with torch.no_grad():
+                Q_pb = 16
+                block_counts = (counts + Q_pb - 1) // Q_pb
+                block_counts = block_counts.int()
+                block_counts_cumsum = block_counts.view(-1).cumsum(-1).view(N, H, C).int()
+                indx_maps = torch.ones(
+                    (block_counts.sum(), 4),
+                    device=Q.device,
+                    dtype=torch.int32
+                )
+
+                counts_cumsum = counts.cumsum(-1).int()
+                total_blocks = block_counts.sum().item()
+
+            # Actually perform the backward pass
+            ClusteredSparseDotProduct.dot_backward[Q.device.type](
+                Q,
+                K,
+                groups.int(),
+                topk.int(),
+                grad_output,
+                grad_Q,
+                grad_K,
+                counts_cumsum - counts,
+                counts_cumsum,
+                block_counts,
+                block_counts_cumsum,
+                total_blocks,
+                indx_maps
+            )
+
+        return grad_Q, grad_K, None, None, None, None, None
+
 
 class ClusteredSparseWeightedAverage(torch.autograd.Function):
     """Compute the weighted average only for the topk values."""
@@ -233,47 +283,111 @@ class ClusteredSparseWeightedAverage(torch.autograd.Function):
     }
 
     @staticmethod
-    def forward(ctx, weights, values, topk, groups):
+    def forward(ctx, weights, values, topk, groups, counts):
         # Save the tensors to compute the gradient
-        ctx.save_for_backward(weights, values, topk, groups)
+        ctx.save_for_backward(weights, values, topk, groups, counts)
 
         # Allocate the output tensor
         N, H, L, _ = weights.shape
         _, _, _, E = values.shape
+        _, _, C, _ = topk.shape
         output = values.new_zeros(N, H, L, E)
-        
-        # Compute the average
-        ClusteredSparseWeightedAverage.avg[weights.device.type](
-            weights,
-            values,
-            groups,
-            topk,
-            output
-        )
+        device = weights.device
+
+        if device.type == "cpu":
+            # Compute the average
+            ClusteredSparseWeightedAverage.avg[weights.device.type](
+                weights,
+                values,
+                groups,
+                topk,
+                output
+            )
+        else:
+            # Bookkeeping parameters to facilitate the GPU cuda kernel
+            with torch.no_grad():
+                Q_pb = 16
+                block_counts = (counts + Q_pb - 1) // Q_pb
+                block_counts = block_counts.int()
+                block_counts_cumsum = block_counts.view(-1).cumsum(-1).view(N, H, C).int()
+                indx_maps = torch.ones(
+                    (block_counts.sum(), 4),
+                    device=weights.device,
+                    dtype=torch.int32
+                )
+                counts_cumsum = counts.cumsum(-1).int()
+                total_blocks = block_counts.sum().item()
+
+            # Compute the average
+            ClusteredSparseWeightedAverage.avg[device.type](
+                weights,
+                values,
+                topk.int(),
+                output,
+                counts_cumsum - counts,
+                counts_cumsum,
+                block_counts,
+                block_counts_cumsum,
+                total_blocks,
+                indx_maps
+            )
 
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
         # Extract the saved tensors and allocate memory for the gradients
-        weights, values, topk, groups = ctx.saved_tensors
+        weights, values, topk, groups, counts = ctx.saved_tensors
         grad_weights = torch.zeros_like(weights)
         grad_values = torch.zeros_like(values)
 
         if grad_output.stride()[-1] != 1:
             grad_output = grad_output.contiguous()
 
-        ClusteredSparseWeightedAverage.avg_backward[weights.device.type](
-            weights,
-            values,
-            groups,
-            topk,
-            grad_output,
-            grad_weights,
-            grad_values
-        )
+        device = weights.device
+        if device.type == "cpu":
+            ClusteredSparseWeightedAverage.avg_backward[weights.device.type](
+                weights,
+                values,
+                groups,
+                topk,
+                grad_output,
+                grad_weights,
+                grad_values
+            )
+        else:
+            # Bookkeeping parameters to facilitate the cuda kernel
+            with torch.no_grad():
+                N, H, C = counts.shape
+                Q_pb = 16
+                block_counts = (counts + Q_pb - 1) // Q_pb
+                block_counts = block_counts.int()
+                block_counts_cumsum = block_counts.view(-1).cumsum(-1).view(N, H, C).int()
 
-        return grad_weights, grad_values, None, None
+                indx_maps = torch.ones(
+                    (block_counts.sum(), 4),
+                    device=weights.device,
+                    dtype=torch.int32
+                )
+                counts_cumsum = counts.cumsum(-1).int()
+                total_blocks = block_counts.sum().item()
+
+            # Do sparse weighted average backward pass
+            ClusteredSparseWeightedAverage.avg_backward[device.type](
+                weights,
+                values,
+                topk.int(),
+                grad_output,
+                grad_weights,
+                grad_values,
+                counts_cumsum - counts,
+                counts_cumsum,
+                block_counts,
+                block_counts_cumsum,
+                total_blocks,
+                indx_maps
+            )
+        return grad_weights, grad_values, None, None, None, None
 
 
 # Alias the autograd functions to python style snake case naming
