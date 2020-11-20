@@ -154,13 +154,20 @@ class Favor(RandomFourierFeatures):
                    is equivalent to a robust implementation of softmax where
                    the max is subtracted before the exponentiation.
                    (default: False)
+        feature_redraw_interval: int, If not None then the random features will
+                   be automatically redrawn every N forward passes, as recommended
+                   in the Performers paper. Defaults to 1000.
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
-                 orthogonal=True, stabilize=False):
+                 orthogonal=True, stabilize=False, feature_redraw_interval=1000):
         super(Favor, self).__init__(query_dimensions, n_dims=n_dims,
                                     softmax_temp=softmax_temp,
                                     orthogonal=orthogonal)
+        self.feature_redraw_interval = feature_redraw_interval
         self.stabilize = stabilize
+        
+        if self.feature_redraw_interval is not None:
+            self.register_buffer('calls_since_last_redraw', torch.tensor(0)) # Make sure this is persistent
 
     def _check_sequence_length(self, x):
         """Check that the 2nd dimension is larger than the 3rd as a heuristic
@@ -180,6 +187,14 @@ class Favor(RandomFourierFeatures):
                            "{!r}.").format(x.shape))
 
     def forward(self, x):
+        # Check if we need to redraw features
+        if self.feature_redraw_interval is not None:
+            if self.calls_since_last_redraw >= self.feature_redraw_interval:
+                self.new_feature_map()
+                self.calls_since_last_redraw = torch.tensor(0)
+            else:
+                self.calls_since_last_redraw += 1
+        
         x = x * sqrt(self.softmax_temp)
         norm_x_squared = torch.einsum("...d,...d->...", x, x).unsqueeze(-1)
         u = x.unsqueeze(-2).matmul(self.omega).squeeze(-2)
