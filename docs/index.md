@@ -84,7 +84,7 @@ If you found our research helpful or influential please consider citing
 @article{vyas_et_al_2020,
     author={Vyas, A. and Katharopoulos, A. and Fleuret, F.},
     title={Fast Transformers with Clustered Attention},
-    journal={arXiv preprint arXiv:2007.04825},
+    booktitle = {Proceedings of the International Conference on Neural Information Processing Systems (NeurIPS)},
     year={2020}
 }
 ```
