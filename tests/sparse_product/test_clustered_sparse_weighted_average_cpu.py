@@ -85,7 +85,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
         grad = [torch.clone(weights.grad), torch.clone(values.grad)]
 
         self._zero_grad(weights, values)
-        output_hat = clustered_sparse_weighted_average(weights, values, topk, groups)
+        output_hat = clustered_sparse_weighted_average(weights, values, topk, groups, counts)
         output_hat.sum().backward()
         grad_hat = [torch.clone(weights.grad), torch.clone(values.grad)]
         self.assertLess(
@@ -133,7 +133,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
         ]
 
         output = (weights.unsqueeze(-1)*values_selected).sum(-2)
-        output_hat = clustered_sparse_weighted_average(weights, values, topk, groups)
+        output_hat = clustered_sparse_weighted_average(weights, values, topk, groups, counts)
         self.assertLess(
             torch.abs(output - output_hat).max(),
             1e-4
@@ -174,7 +174,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
         for i in range(n_runs):
             output_hat = clustered_sparse_weighted_average(
                 weights, values,
-                topk, groups
+                topk, groups, counts
             )
         e = time.time()
         t_sparse = (e - s) / n_runs
@@ -215,7 +215,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
         for i in range(n_runs):
             output_hat = clustered_sparse_weighted_average(
                 weights, values,
-                topk, groups
+                topk, groups, counts
             )
             output_hat.sum().backward()
         e = time.time()
