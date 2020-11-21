@@ -17,7 +17,7 @@ from ..attention_registry import AttentionRegistry, Optional, Float, Int, \
     Bool, EventDispatcherInstance
 from ..events import EventDispatcher
 from ..masking import FullMask
-from ..aggregate import aggregate, broadcast
+from ..aggregate import clustered_aggregate, clustered_broadcast
 from ..clustering.hamming import cluster
 from ..hashing import compute_hashes
 from ..sparse_product import sparse_dot_product, sparse_weighted_average
@@ -27,36 +27,36 @@ from ..sparse_product import clustered_sparse_dot_product, \
 
 class _GroupQueries(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, Q, clusters, counts):
-        factors = 1/counts.float()
-        q_grouped = aggregate(Q, clusters, factors)
-        ctx.save_for_backward(clusters, factors)
+    def forward(ctx, Q, clusters, counts, lengths):
+        factors = 1./counts.float()
+        q_grouped = clustered_aggregate(Q, clusters, factors, lengths)
+        ctx.save_for_backward(clusters, counts, factors)
 
         return q_grouped
 
     @staticmethod
     def backward(ctx, grad_q_grouped):
-        clusters, factors = ctx.saved_tensors
-        grad_q = broadcast(grad_q_grouped, clusters, factors)
+        clusters, counts, factors = ctx.saved_tensors
+        grad_q = clustered_broadcast(grad_q_grouped, clusters, counts, factors)
 
-        return grad_q, None, None
+        return grad_q, None, None, None
 
 
 class _BroadcastValues(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, v_grouped, clusters, counts):
+    def forward(ctx, v_grouped, clusters, counts, lengths):
         factors = torch.ones_like(counts, dtype=v_grouped.dtype)
-        V = broadcast(v_grouped, clusters, factors)
-        ctx.save_for_backward(clusters, factors)
+        V = clustered_broadcast(v_grouped, clusters, counts, factors)
+        ctx.save_for_backward(clusters, counts, factors, lengths)
 
         return V
 
     @staticmethod
     def backward(ctx, grad_v):
-        clusters, factors = ctx.saved_tensors
-        grad_v_grouped = aggregate(grad_v, clusters, factors)
+        clusters, counts, factors, lengths = ctx.saved_tensors
+        grad_v_grouped = clustered_aggregate(grad_v, clusters, factors, lengths)
 
-        return grad_v_grouped, None, None
+        return grad_v_grouped, None, None, None, None
 
 
 class ImprovedClusteredAttention(Module):
@@ -70,7 +70,7 @@ class ImprovedClusteredAttention(Module):
 
     We now use to the centroids Q_c to identify the top-k keys with highest
     dot products.
-    
+
     Subsequently, for each query we compute the sparse dot product with
     the corresponding top-k keys to improve the attention approximation.
 
@@ -123,7 +123,8 @@ class ImprovedClusteredAttention(Module):
             iterations=self.iterations,
             bits=self.bits
         )
-        return clusters, counts
+        sorted_clusters, sorted_indx = torch.sort(clusters, dim=-1)
+        return (sorted_clusters, counts), sorted_indx
 
     def _topk_attention(self, Q, K, V,
                         clusters, counts,
@@ -149,25 +150,26 @@ class ImprovedClusteredAttention(Module):
         )
         A = torch.softmax(softmax_temp * QK, dim=-1)
         assert A_bottomk.is_contiguous()
-        A_bottomk = broadcast(
+        A_bottomk = clustered_broadcast(
             A_bottomk.unsqueeze(3),
             clusters,
+            counts,
             torch.ones_like(counts, dtype=torch.float32)
         )
         A = A * (1.0 - A_bottomk)
         A = self.dropout(A)
         assert A.is_contiguous()
-        V_new = clustered_sparse_weighted_average(A, V, topk, clusters)
+        V_new = clustered_sparse_weighted_average(A, V, topk, clusters, counts)
 
         return V_new
 
-    def _broadcast_values(self, V, clusters, counts):
+    def _broadcast_values(self, V, clusters, counts, lengths):
         """Broadcast the values back to the correct positions but make sure
         that the gradient flows properly."""
-        V_new = _BroadcastValues.apply(V.contiguous(), clusters, counts)
+        V_new = _BroadcastValues.apply(V.contiguous(), clusters, counts, lengths)
         return V_new
 
-    def _bottomk_attention(self, QK, V, clusters, counts, topk, softmax_temp): 
+    def _bottomk_attention(self, QK, V, clusters, counts, query_lengths, topk, softmax_temp):
         """Return the attention with just the bottomk keys."""
         N, H, C, S = QK.shape
 
@@ -185,8 +187,8 @@ class ImprovedClusteredAttention(Module):
         # Compute the values
         V_new = torch.einsum("nhls,nhse->nhle", A, V)
         # Broadcast the values back depending on the groups
-        V_new = self._broadcast_values(V_new, clusters, counts)
-        
+        V_new = self._broadcast_values(V_new, clusters, counts, query_lengths._lengths.int())
+
         return V_new, A_bottomk
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
@@ -199,11 +201,23 @@ class ImprovedClusteredAttention(Module):
         keys = keys.permute(0,2,1,3).contiguous()
         values = values.permute(0,2,1,3).contiguous()
         N, H, L, E = queries.shape
+        _, _, S, D = values.shape
         softmax_temp = self.softmax_temp or 1./sqrt(E)
-        
+
         # Cluster the queries into groups
-        clusters, counts = self._create_query_groups(queries, query_lengths)
-        Q_grouped = _GroupQueries.apply(queries, clusters, counts)
+        groups, sorted_indx = self._create_query_groups(queries, query_lengths)
+        clusters, counts = groups
+
+        # Re-organize queries so that first group belong to first cluster
+        # next to second cluster and so on. This improves kernel implementations.
+        # Note that this step is introduced after NeurIPS submission and
+        # now the complexity is O(N log(N)).
+        q_offset = torch.arange(N*H, device=queries.device).unsqueeze(-1) * L
+        q_flat = (sorted_indx.view(N*H, -1) + q_offset).reshape(-1)
+        s_queries = queries.reshape(-1, E).index_select(0, q_flat).view(N,H,L,E)
+
+        # Aggregate the re-arranged queries.
+        Q_grouped = _GroupQueries.apply(s_queries, *groups, query_lengths._lengths.int())
         # Compute the attention
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, keys)
         QK = QK + key_lengths.additive_matrix[:, None, None, :]
@@ -214,21 +228,26 @@ class ImprovedClusteredAttention(Module):
         V_bottomk, A_bottomk = self._bottomk_attention(
             QK, values,
             clusters, counts,
+            query_lengths,
             topk,
             softmax_temp
         )
 
         # Now compute the attention with only the top keys
         V_topk = self._topk_attention(
-            queries, keys, values,
+            s_queries, keys, values,
             clusters, counts,
             topk, topk_values,
             A_bottomk,
             softmax_temp,
             query_lengths
         )
-        V_new = V_topk + V_bottomk
+        V_sorted_new = V_topk + V_bottomk
 
+        # Reverse the previous mapping
+        sorted_rev_indx = torch.argsort(sorted_indx, dim=-1)
+        q_rev_flat = (sorted_rev_indx.view(N*H, -1) + q_offset).reshape(-1)
+        V_new = V_sorted_new.reshape(-1, D).index_select(0, q_rev_flat).view(N,H,L,D)
         return V_new.permute(0, 2, 1, 3).contiguous()
 
 
