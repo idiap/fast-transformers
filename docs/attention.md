@@ -93,6 +93,7 @@ Docs][1] for an exhaustive list of attention implementations.
 * [LinearAttention][4]
 * [CausalLinearAttention][5]
 * [ImprovedClusteredAttention][6]
+* [ImprovedClusteredCausalAttention][11]
 * [ClusteredAttention][7]
 * [ReformerAttention][8]
 * [LocalAttention][10]
@@ -109,3 +110,4 @@ Docs][1] for an exhaustive list of attention implementations.
 [8]: /api_docs/fast_transformers/attention/reformer_attention.html
 [9]: /api_docs/fast_transformers/attention/conditional_full_attention.html
 [10]: /api_docs/fast_transformers/attention/local_attention.html
+[11]: /api_docs/fast_transformers/attention/improved_clustered_causal_attention.html
