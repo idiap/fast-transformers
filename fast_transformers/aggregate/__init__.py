@@ -75,7 +75,7 @@ def clustered_broadcast(Y, groups, counts, factors, X=None):
             dtype=Y.dtype
         )
     if device.type == "cpu":
-        broadcast_cpu(Y, groups, counts, X)
+        broadcast_cpu(Y, groups, factors, X)
     else:
         N, H, C, E = Y.shape
         _, _, L, _ = X.shape
