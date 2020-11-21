@@ -122,8 +122,9 @@ class TestClusteredBroadcastCPU(unittest.TestCase):
             S = np.random.randint(100, 1000)
             C = np.random.randint(10, 500)
             L = np.random.randint(C, 2000)
+            E = np.random.randint(10, 160)
             lengths = torch.tensor(
-                np.random.randint(C, L, N),
+                np.random.randint(C, L+1, N),
                 dtype=torch.int32
             ).cpu()
             print("Test: N H L S E C: {} {} {} {} {} {}".format(
