@@ -247,7 +247,7 @@ AttentionRegistry.register(
     [
         ("clusters", Int),
         ("iterations", Optional(Int, 10)),
-        ("bits", Optional(Int, 32)),
+        ("bits", Optional(Int, 63)),
         ("hash_bias", Optional(Bool, True)),
         ("topk", Optional(Int, 32)),
         ("softmax_temp", Optional(Float)),

@@ -186,7 +186,7 @@ AttentionRegistry.register(
     [
         ("clusters", Int),
         ("iterations", Optional(Int, 10)),
-        ("bits", Optional(Int, 32)),
+        ("bits", Optional(Int, 63)),
         ("hash_bias", Optional(Bool, True)),
         ("softmax_temp", Optional(Float)),
         ("attention_dropout", Optional(Float, 0.1)),
