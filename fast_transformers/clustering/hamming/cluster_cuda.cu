@@ -390,7 +390,7 @@ void cluster(
     int L = hashes.size(2);
 
     // initialize the centroids
-    centroids.view({-1, K}) = hashes.view({-1, L}).narrow(1, 0, K);
+    //centroids.view({-1, K}) = hashes.view({-1, L}).narrow(1, 0, K);
     
     kmeans(
         hashes,

@@ -244,7 +244,7 @@ void cluster(
 ) {
     int K = centroids.size(2);
     // Initialize the centroids and the assignments
-    initialize(hashes, centroids);
+    // initialize(hashes, centroids);
     clusters.fill_(K+1);
 
     // Perform iterations of Lloyd's algorithm

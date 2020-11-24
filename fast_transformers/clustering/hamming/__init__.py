@@ -5,6 +5,8 @@
 #
 
 
+import numpy as np
+
 import torch
 
 from .cluster_cpu import cluster as cluster_cpu
@@ -67,6 +69,7 @@ def cluster(
             groups = torch.empty((N, H, L), dtype=torch.int32)
         if centroids is None:
             centroids = torch.empty((N, H, clusters), dtype=torch.int64)
+            centroids = hashes[:, :, np.random.choice(L, size=[clusters], replace=False)]
         K = centroids.shape[2]
         if counts is None:
             counts = torch.empty((N, H, K), dtype=torch.int32)
@@ -85,6 +88,7 @@ def cluster(
         if centroids is None:
             centroids = torch.empty((N, H, clusters), dtype=torch.int64,
                                     device=device)
+            centroids = hashes[:, :, np.random.choice(L, size=[clusters], replace=False)]
         K = centroids.numel() // N // H
         #K = clusters
         if counts is None:
