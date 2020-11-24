@@ -141,7 +141,7 @@ class TestClusteringGPU(unittest.TestCase):
         
         k=20
         n_buckets=31
-        n_iterations=10
+        n_iterations=20
 
         n_points = L * N * H
 
