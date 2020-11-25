@@ -28,7 +28,7 @@ int hamming_distance(int64_t a, int64_t b) {
 /**
  * Set up the kernel to generate cuda random numbers
  */
-__global__ 
+__global__
 void setup_kernel(curandState *state) {
     int idx = threadIdx.x+blockDim.x*blockIdx.x;
     curand_init(1234, idx, 0, &state[idx]);
@@ -46,13 +46,13 @@ void setup_kernel(curandState *state) {
  *     lengths                : sequence lengths array
  *     centroids              : current estimate of the centroids
  *     n_blocks_per_sequence  : number of blocks allocated per sequence
- *     MAX                    : MAX distance possible (64 int_64 hamming) 
+ *     MAX                    : MAX distance possible (64 int_64 hamming)
  *
  * Outputs:
  *     labels                 : labels  to be assigned to each data point
  *     distances              : distances to the closest cluster
  */
-__global__ 
+__global__
 void assign_clusters_kernel(
     const int64_accessor_3d hash_codes,
     const int32_accessor_1d lengths,
@@ -98,7 +98,7 @@ void assign_clusters_kernel(
 
     // update the cluster assingments
     // 64 bit hashcodes can have maximum hamming distance as 64
-    int best_distance = MAX; 
+    int best_distance = MAX;
     int best_cluster = 0;
     int dist = 0;
     for (int cluster = 0; cluster < K; ++cluster) {
@@ -114,28 +114,28 @@ void assign_clusters_kernel(
 }
 
 /**
- * This kernel counts the number of data points belonging to each  cluster and 
- * also updates cluster_bit_counts for each cluster cluster_bit_counts for any 
- * cluster is an array with size [B x 1]. Each position stores the 
+ * This kernel counts the number of data points belonging to each  cluster and
+ * also updates cluster_bit_counts for each cluster cluster_bit_counts for any
+ * cluster is an array with size [B x 1]. Each position stores the
  * difference of number of data points with ones and number of data points with
  * zeros at that position in the binary representation of the number.
- * 
+ *
  * Arguments:
  * ---------
  * Inputs:
  *     labels             : labels  to be assigned to each data point
  *     hash_codes         : hash codes to be clustered
- * 
+ *
  * Outputs:
- *     counts             : array to store the number of datapoints 
+ *     counts             : array to store the number of datapoints
  *                          belonging to any cluster
  *     cluster_bit_counts : array containing the bit counts
  */
-__global__ 
+__global__
 void bit_count_kernel(
-    const int32_accessor_3d labels, 
-    const int64_accessor_3d hash_codes, 
-    int32_accessor_3d counts, 
+    const int32_accessor_3d labels,
+    const int64_accessor_3d hash_codes,
+    int32_accessor_3d counts,
     int32_accessor_4d cluster_bit_counts
 ) {
     const int N = labels.size(0);
@@ -147,10 +147,10 @@ void bit_count_kernel(
     const int hl = H*L;
     // Extract the indices
     int full_idx = (blockDim.x * blockIdx.x) + threadIdx.x;
-    const int sequence_index = full_idx / L; 
-    const int n = sequence_index / H; 
-    const int h = sequence_index % H; 
-    const int l = full_idx - n*hl - h*L; 
+    const int sequence_index = full_idx / L;
+    const int n = sequence_index / H;
+    const int h = sequence_index % H;
+    const int l = full_idx - n*hl - h*L;
     if (n >= N)
         return;
 
@@ -181,15 +181,15 @@ void bit_count_kernel(
  * ---------
  * Inputs:
  *     state              : cuda randome state for the random number generation
- *     counts             : array to store the number of datapoints 
+ *     counts             : array to store the number of datapoints
  *                          belonging to any cluster
  * Outputs:
  *     centroids          : centroids to be updated
  *     cluster_bit_counts : array containing the bit counts
  */
-__global__ 
+__global__
 void compute_means_kernel(
-    const int32_accessor_3d counts, 
+    const int32_accessor_3d counts,
     int32_accessor_4d cluster_bit_counts,
     int64_accessor_3d centroids,
     curandState* state
@@ -220,19 +220,19 @@ void compute_means_kernel(
 
     //update otherwise
     for( int i=0; i<B; i++) {
-        if(cluster_bit_counts[n][h][k][i] == 0) { 
-            cluster_bit_counts[n][h][k][i] = 
+        if(cluster_bit_counts[n][h][k][i] == 0) {
+            cluster_bit_counts[n][h][k][i] =
                 (curand(state + k) & 1L);
         }
         if(cluster_bit_counts[n][h][k][i] > 0) {
             mean_k = mean_k | (1L << i);
         }
-    } 
+    }
     centroids[n][h][k] = mean_k;
 }
 
 /**
- * Kmeans runs lloyd iteratively to first assign the points and then update 
+ * Kmeans runs lloyd iteratively to first assign the points and then update
  * the clusters
  * Arguments:
  * ---------
@@ -311,11 +311,11 @@ void kmeans(
 
         counts.zero_();
         cluster_bit_counts.zero_();
-         
+
         bit_count_kernel<<<n_blocks_cnt,
                            n_threads_cnt>>>(
-            labels_acc, 
-            hash_codes_acc, 
+            labels_acc,
+            hash_codes_acc,
             counts_acc,
             cluster_bit_counts_acc
         );
@@ -341,11 +341,11 @@ void kmeans(
 
     counts.zero_();
     cluster_bit_counts.zero_();
-               
+
     bit_count_kernel<<<n_blocks_cnt,
                        n_threads_cnt>>>(
-        labels_acc, 
-        hash_codes_acc, 
+        labels_acc,
+        hash_codes_acc,
         counts_acc,
         cluster_bit_counts_acc
     );
@@ -356,19 +356,19 @@ void kmeans(
 
 
 /**
- * Cluster the hash codes H using Llyod's K-Means clustering 
+ * Cluster the hash codes H using Llyod's K-Means clustering
  * Inputs:
  *
  * Arguments:
  * ---------
  * Inputs:
  *     hashes    : hashes to be clustered
- *     
+ *
  * Buffers:
  *     centroids : centroids buffer
  *     distances : distances buffer
  *     bitcounts : cluster_bit_counts buffer
- * 
+ *
  * Outputs:
  *     clusters  : Store the groups/labels/assignments
  *     counts    : Store the counts of the number of points in each cluster
@@ -391,7 +391,7 @@ void cluster(
 
     // initialize the centroids
     //centroids.view({-1, K}) = hashes.view({-1, L}).narrow(1, 0, K);
-    
+
     kmeans(
         hashes,
         lengths,

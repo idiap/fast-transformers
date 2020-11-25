@@ -2,7 +2,7 @@
 // Copyright (c) 2020 Idiap Research Institute, http://www.idiap.ch/
 // Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
 // Written by Apoorv Vyas <avyas@idiap.ch>
-// 
+//
 // Updated by Apoorv Vyas: 19/11/2020
 
 #include <torch/extension.h>
@@ -65,7 +65,7 @@ __global__ void clustered_aggregate_kernel(
         float res = 0.0;
         k_cur = g[n][h][l];
         k_prev = k_cur;
-        float f_cur = f[n][h][k_cur]; 
+        float f_cur = f[n][h][k_cur];
         for (int i=l; i<l_end; i++) {
             k_cur = g[n][h][i];
             if (k_cur == k_prev) {
@@ -76,7 +76,7 @@ __global__ void clustered_aggregate_kernel(
                 f_cur = f[n][h][k_cur];
                 k_prev = k_cur;
                 res = (f_cur *  x[n][h][i][e]);
-            } 
+            }
         }
         atomicAdd(&y[n][h][k_cur][e], res);
     }
@@ -125,15 +125,15 @@ void clustered_aggregate(
 // The number of clusters in the group are
 // decided by the size of shared memory
 // Assume E dimension of each vector to be broadcasted
-// #clusters * E < 192 * 64 
+// #clusters * E < 192 * 64
 // 192 * 64 are the total number of floats we can hold in
 // shared memory
-// The idea is the 
+// The idea is the
 // Originally we needed (N*H*L)/threads_size blocks
 // To calculate the required number of blocks now
 // we will additionally need the counts of clusters
 // For group 1, we need N*H*(sum of counts in g1) / threads blocks
-// For group 2, we need N*H*(sum of counts in g2) / threads blocks 
+// For group 2, we need N*H*(sum of counts in g2) / threads blocks
 // Note that in practice we will not need crazy number of groups.
 // For E=64, a single group can hold 192 clusters.
 
@@ -151,7 +151,7 @@ __global__ void clustered_broadcast_kernel(
     int L = x.size(2);
     int E = x.size(3);
     int C = y.size(2);
-   
+
     extern __shared__ float shared_mem[];
     int n = indx_maps[blockIdx.x][0];
     int h = indx_maps[blockIdx.x][1];
@@ -204,10 +204,10 @@ void create_maps(
             for (int h=0; h<H; h++) {
                 int acc_g_count = 0;
                 for (int g=0; g<G; g++) {
-                    
+
                     int q_id = acc_g_count;
                     int q_end_id = 0;
-                    int g_count = group_counts[n][h][g]; 
+                    int g_count = group_counts[n][h][g];
                     int blocks = block_counts[n][h][g];
                     for (int b=0; b<blocks; b++) {
                         indx_maps[indx][0] = n;

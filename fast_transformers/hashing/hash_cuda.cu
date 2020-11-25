@@ -37,7 +37,7 @@ __global__ void hash_kernel(
     extern __shared__ float shared_planes[];
     if (threadIdx.x < B) {
         int plane_idx = threadIdx.x;
-        float *s_plane = shared_planes + threadIdx.x; 
+        float *s_plane = shared_planes + threadIdx.x;
         for (int i=0; i<=D; i++) {
             *s_plane = a[plane_idx][i];
             s_plane += B;
@@ -46,7 +46,7 @@ __global__ void hash_kernel(
 
     // Shared memory to store for projection for a plane
     // We do this to avoid atomic or for the hash.
-    uint8_t *shared_out = (uint8_t*)(shared_planes + (B*(D+1))); 
+    uint8_t *shared_out = (uint8_t*)(shared_planes + (B*(D+1)));
     __syncthreads();
 
 
@@ -62,7 +62,7 @@ __global__ void hash_kernel(
 
     // Compute the dot product and the contributing bit
     float s = 0;
-    float *plane = shared_planes + b; 
+    float *plane = shared_planes + b;
     for (int i=0; i<D; i++) {
         s += x[n][i] * (*plane);
         plane = plane + B;
@@ -74,14 +74,14 @@ __global__ void hash_kernel(
 
     // Aggregating the result and writing on to the hash
     if (threadIdx.x < queries_per_block) {
-        int n = blockIdx.x * queries_per_block + threadIdx.x; 
+        int n = blockIdx.x * queries_per_block + threadIdx.x;
         if (n >= N) {
             return;
         }
         unsigned long long int h_out = 0;
         for (int b=0; b<B; b++) {
             unsigned long long int bit = static_cast<unsigned long long int>(
-                shared_out[threadIdx.x*B + b]) << b; 
+                shared_out[threadIdx.x*B + b]) << b;
             h_out = (h_out | bit);
         }
         h[n] = h_out;
@@ -98,14 +98,14 @@ void compute_hashes(torch::Tensor X, torch::Tensor A, torch::Tensor H) {
     int B = A.size(0);
     int D = X.size(1);
     assert(((void)"Bias expected for the parameters", D+1 == A.size(1)));
-     
+
     // Computing the number of hashes to be computed per block
     const int max_threads = 1024;
     const int max_queries_per_block = 512;
     const int threads = (max_queries_per_block * B) < max_threads ?
         (max_queries_per_block * B): (max_threads / B) * B;
     int queries_per_block = threads / B;
-    
+
     // Allocating the shared memory to store the hyperplanes and output
     const int shared_mem_planes = (B * (D+1) * sizeof(float)) +
                                   (queries_per_block * B * sizeof(uint8_t));

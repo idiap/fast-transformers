@@ -44,7 +44,7 @@ __global__ void clustered_sparse_dot_product_kernel(
 ) {
     int E = queries.size(3);
     int K = topk.size(3);
-    
+
     extern __shared__ float shared_mem[];
     float* shared_queries = shared_mem;
     float* shared_keys = shared_queries + (EPB*QPB);
@@ -64,7 +64,7 @@ __global__ void clustered_sparse_dot_product_kernel(
         }
     }
     __syncthreads();
-  
+
     float res = 0.0;
     int rq_indx = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * QPB)  + threadIdx.x;
     int rk_indx = shared_topk[threadIdx.y];
@@ -83,7 +83,7 @@ __global__ void clustered_sparse_dot_product_kernel(
             shared_keys[threadIdx.y + (KPB * threadIdx.x)] = keys[n][h][rk_indx][ck_indx];
         }
         else{
-            shared_keys[threadIdx.y + (KPB * threadIdx.x)] = 0; 
+            shared_keys[threadIdx.y + (KPB * threadIdx.x)] = 0;
         }
         __syncthreads();
         for (int e=0; e<EPB; e++) {
@@ -151,7 +151,6 @@ void clustered_sparse_dot_product(
     torch::Tensor indx_maps,
     torch::Tensor product
 ) {
-    
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
@@ -170,7 +169,6 @@ void clustered_sparse_dot_product(
     );
 
     dim3 dimBlock(QPB, KPB);
-    
     dim3 dimGrid(total_blocks, (k + KPB - 1)/KPB);
     const int shared_mem = (((KPB + QPB) * EPB) + KPB) * sizeof(float);
     clustered_sparse_dot_product_kernel<<<dimGrid, dimBlock, shared_mem>>>(
@@ -213,7 +211,7 @@ __global__ void clustered_sparse_dot_queries_backward_kernel(
     int h = indx_maps[blockIdx.x][1];
     int c = indx_maps[blockIdx.x][2];
     int l_end = q_end_indx[n][h][c];
-    
+
     // Load all the top indices for all keys
     int thread_id = threadIdx.x + (threadIdx.y * blockDim.x);
     for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
@@ -244,7 +242,7 @@ __global__ void clustered_sparse_dot_queries_backward_kernel(
             shared_keys[threadIdx.x + (KPB * threadIdx.y)] = keys[n][h][shared_topk[rk_indx]][e_indx];
         }
         else{
-            shared_keys[threadIdx.x + (KPB * threadIdx.y)] = 0; 
+            shared_keys[threadIdx.x + (KPB * threadIdx.y)] = 0;
         }
         __syncthreads();
         for (int k=0; k<KPB; k++) {
@@ -341,7 +339,7 @@ __global__ void clustered_sparse_weighted_average_kernel(
     int h = indx_maps[blockIdx.x][1];
     int c = indx_maps[blockIdx.x][2];
     int l_end = q_end_indx[n][h][c];
-    
+
     // Load all the top indices for all keys
     int thread_id = threadIdx.x + threadIdx.y * blockDim.x;
     for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
@@ -365,7 +363,7 @@ __global__ void clustered_sparse_weighted_average_kernel(
             shared_values[threadIdx.x + (KPB * threadIdx.y)] = values[n][h][shared_topk[rk_indx]][e_indx];
         }
         else{
-            shared_values[threadIdx.x + (KPB * threadIdx.y)] = 0; 
+            shared_values[threadIdx.x + (KPB * threadIdx.y)] = 0;
         }
         __syncthreads();
         for (int k=0; k<KPB; k++) {
@@ -376,7 +374,6 @@ __global__ void clustered_sparse_weighted_average_kernel(
     if ((rq_indx < l_end) && (e_indx < E)) {
         output[n][h][rq_indx][e_indx] = res;
     }
-    
 }
 
 
@@ -453,7 +450,7 @@ __global__ void clustered_sparse_weighted_average_backward_kernel(
     int h = indx_maps[blockIdx.x][1];
     int c = indx_maps[blockIdx.x][2];
     int l_end = q_end_indx[n][h][c];
-    
+
     // Load all the top indices
     int thread_id = threadIdx.x + (threadIdx.y * blockDim.x);
     for (int t=thread_id; t<K; t+=(blockDim.x*blockDim.y)) {
@@ -464,7 +461,7 @@ __global__ void clustered_sparse_weighted_average_backward_kernel(
     int e_indx;
     int q_indx_local;
     int e_indx_local;
-    int q_start = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * q_per_block); 
+    int q_start = q_start_indx[n][h][c] + (indx_maps[blockIdx.x][3] * q_per_block);
 
     for (int t=thread_id; t<(EPB*q_per_block); t+=(blockDim.x*blockDim.y)) {
         q_indx_local = t / EPB;
@@ -500,7 +497,7 @@ __global__ void clustered_sparse_weighted_average_backward_kernel(
     if ((k_id < K) && (e_indx < E)) {
         k_indx = shared_topk[k_id];
         for (int t=0; t<q_per_block; t++) {
-            res += shared_grad[(t*EPB) + threadIdx.y] * shared_weights[(t*KPB) + threadIdx.x]; 
+            res += shared_grad[(t*EPB) + threadIdx.y] * shared_weights[(t*KPB) + threadIdx.x];
         }
         atomicAdd(&grad_v[n][h][k_indx][e_indx], res);
     }

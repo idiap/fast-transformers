@@ -16,7 +16,7 @@ from ..._utils import check_state
 
 class RecurrentAttentionLayer(Module):
     """See fast_transformers.attention.attention_layer.AttentionLayer.
-    
+
     The only difference with the corresponding module is that this projects
     only one input and then calls the inner attention with the provided
     previous state.

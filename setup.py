@@ -72,7 +72,7 @@ def get_extensions():
         CppExtension(
             "fast_transformers.aggregate.aggregate_cpu",
             sources=[
-               "fast_transformers/aggregate/aggregate_cpu.cpp" 
+               "fast_transformers/aggregate/aggregate_cpu.cpp"
             ],
             extra_compile_args=["-fopenmp", "-ffast-math"]
         ),

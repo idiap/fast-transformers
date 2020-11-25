@@ -39,7 +39,7 @@ class BaseMask(object):
     @property
     def lengths(self):
         """If the matrix is of the following form
-        
+
             1 1 1 0 0 0 0
             1 0 0 0 0 0 0
             1 1 0 0 0 0 0
@@ -164,7 +164,7 @@ class FullMask(BaseMask):
 class LengthMask(BaseMask):
     """Provide a BaseMask interface for lengths. Mostly to be used with
     sequences of different lengths.
-    
+
     Arguments
     ---------
         lengths: The lengths as a PyTorch long tensor
@@ -193,7 +193,7 @@ class LengthMask(BaseMask):
 
 class TriangularCausalMask(LengthMask):
     """A square matrix with everything masked out above the diagonal.
-    
+
     Arguments
     ---------
         N: The size of the matrix

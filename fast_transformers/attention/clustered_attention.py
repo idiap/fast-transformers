@@ -65,7 +65,7 @@ class ClusteredAttention(Module):
     Q_c.
 
     We now use to the centroids Q_c to compute the attention using:
-    
+
         V'_c = softmax(Q_c.mm(K.t()), dim=-1).mm(V).
 
     Now the computed values V'_c are "broadcasted" back to the query members
@@ -147,10 +147,10 @@ class ClusteredAttention(Module):
         N, H, L, E = queries.shape
         _, _, S, D = values.shape
         softmax_temp = self.softmax_temp or 1./sqrt(E)
-        
+
         # Cluster the queries into groups
         groups, sorted_indx = self._create_query_groups(queries, query_lengths)
-        # Re-organize queries so that first group belong to first cluster 
+        # Re-organize queries so that first group belong to first cluster
         # next to second cluster and so on. This improves kernel implementations.
         # Note that this step is introduced after NeurIPS submission and
         # now the complexity is O(N log(N)).
@@ -174,7 +174,7 @@ class ClusteredAttention(Module):
         q_rev_flat = (rev_indx.view(N*H, -1) + q_offset).reshape(-1)
         V_new = V_broadcast.reshape(-1, D).index_select(0, q_rev_flat).view(N,H,L,D)
         V_new = V_new.permute(0, 2, 1, 3).contiguous()
-        return V_new 
+        return V_new
 
 
 
