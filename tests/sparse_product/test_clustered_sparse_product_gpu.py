@@ -143,7 +143,10 @@ class TestSparseProductCUDA(unittest.TestCase):
             S = np.random.randint(100, 1000)
             k = np.random.randint(10, 64)
 
-            print("Testing: N H L S E C k: {} {} {} {} {} {} {}".format(N, H, L, S, E, C, k))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print("Testing: N H L S E C k: {} {} {} {} {} {} {}".format(
+                    N, H, L, S, E, C, k
+                ))
             Q = torch.randn(N, H, L, E).to(self.device)
             K = torch.randn(N, H, S, E).to(self.device)
             lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)

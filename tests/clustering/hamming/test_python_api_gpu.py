@@ -73,7 +73,8 @@ class TestClusteringGPU(unittest.TestCase):
         n_iterations=10
     
         for n_buckets in range(1, 10):
-            print('Testing convergence for {} bits'.format(n_buckets))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print('Testing convergence for {} bits'.format(n_buckets))
             k = 2**n_buckets
 
             L=k
@@ -181,7 +182,8 @@ class TestClusteringGPU(unittest.TestCase):
 
     
         for n_buckets in range(1, 10):
-            print('Testing convergence for {} bits'.format(n_buckets))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print('Testing convergence for {} bits'.format(n_buckets))
             k = 2**n_buckets
             L = k + 1
             n_points = L * N * H

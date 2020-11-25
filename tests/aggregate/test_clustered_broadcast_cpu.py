@@ -127,8 +127,10 @@ class TestClusteredBroadcastCPU(unittest.TestCase):
                 np.random.randint(C, L+1, N),
                 dtype=torch.int32
             ).cpu()
-            print("Test: N H L S E C: {} {} {} {} {} {}".format(
-                N, H, L, S, E, C))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print(("Test: N H L S E C: "
+                       "{} {} {} {} {} {}").format(N, H, L, S, E, C))
+
             Q = torch.randn(N, H, L, E).cpu()
             groups, counts = cluster_queries(Q, lengths, C, I, B)
             Q_grouped = aggregate(Q, groups, 1/counts.float())
