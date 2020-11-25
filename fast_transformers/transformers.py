@@ -20,7 +20,7 @@ from .masking import FullMask, LengthMask
 
 class TransformerEncoderLayer(Module):
     """Self attention and feed forward network with skip connections.
-    
+
     This transformer encoder layer implements the same encoder layer as
     PyTorch but is a bit more open for extension by receiving the attention
     implementation as a constructor argument.
@@ -125,7 +125,6 @@ class TransformerEncoder(Module):
             length_mask: An implementation of
                          fast_transformers.masking.BaseMask that encodes how
                          many elements each sequence in the batch consists of.
-            
         """
         # Normalize the masks
         N = x.shape[0]

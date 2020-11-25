@@ -34,7 +34,7 @@ void aggregate(
         for (int h=0; h<H; h++) {
             for (int l=0; l<L; l++) {
                 int k = *(g + n*H*L + h*L + l);
-                if (k < 0) {
+                if ((k < 0) || (k >= C)) {
                     continue;
                 }
                 const float *src = x + n*H*L*E + h*L*E + l*E;
@@ -82,7 +82,7 @@ void broadcast(
         for (int n=0; n<N; n++) {
             for (int h=0; h<H; h++) {
                 int k = *(g + n*H*L + h*L + l);
-                if (k < 0) {
+                if ((k < 0) || (k >= C)) {
                     continue;
                 }
                 const float *src = y + n*H*C*E + h*C*E + k*E;

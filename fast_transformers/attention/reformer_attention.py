@@ -156,7 +156,7 @@ AttentionRegistry.register(
     "reformer", ReformerAttention,
     [
         ("chunk_size", Optional(Int, 32)),
-        ("bits", Optional(Int, 32)),
+        ("bits", Optional(Int, 63)),
         ("rounds", Optional(Int, 4)),
         ("masked", Optional(Bool, False)),
         ("softmax_temp", Optional(Float)),

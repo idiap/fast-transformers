@@ -72,7 +72,7 @@ def get_extensions():
         CppExtension(
             "fast_transformers.aggregate.aggregate_cpu",
             sources=[
-               "fast_transformers/aggregate/aggregate_cpu.cpp" 
+               "fast_transformers/aggregate/aggregate_cpu.cpp"
             ],
             extra_compile_args=["-fopenmp", "-ffast-math"]
         ),
@@ -130,9 +130,9 @@ def get_extensions():
                 extra_compile_args=["-arch=compute_50"]
             ),
             CUDAExtension(
-                "fast_transformers.aggregate.clustered_broadcast_cuda",
+                "fast_transformers.aggregate.clustered_aggregate_cuda",
                 sources=[
-                    "fast_transformers/aggregate/clustered_broadcast_cuda.cu"
+                    "fast_transformers/aggregate/clustered_aggregate_cuda.cu"
                 ],
                 extra_compile_args=["-arch=compute_50"]
             ),

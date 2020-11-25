@@ -17,43 +17,43 @@ from ..attention_registry import AttentionRegistry, Optional, Float, Int, \
     Bool, EventDispatcherInstance
 from ..events import EventDispatcher
 from ..masking import FullMask
-from ..aggregate import aggregate, broadcast
+from ..aggregate import clustered_aggregate, clustered_broadcast
 from ..clustering.hamming import cluster
 from ..hashing import compute_hashes
 
 
 class _GroupQueries(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, Q, clusters, counts):
-        factors = 1/counts.float()
-        q_grouped = aggregate(Q, clusters, factors)
-        ctx.save_for_backward(clusters, factors)
+    def forward(ctx, Q, clusters, counts, lengths):
+        factors = 1./counts.float()
+        q_grouped = clustered_aggregate(Q, clusters, factors, lengths)
+        ctx.save_for_backward(clusters, counts, factors)
 
         return q_grouped
 
     @staticmethod
     def backward(ctx, grad_q_grouped):
-        clusters, factors = ctx.saved_tensors
-        grad_q = broadcast(grad_q_grouped, clusters, factors)
+        clusters, counts, factors = ctx.saved_tensors
+        grad_q = clustered_broadcast(grad_q_grouped, clusters, counts, factors)
 
-        return grad_q, None, None
+        return grad_q, None, None, None
 
 
 class _BroadcastValues(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, v_grouped, clusters, counts):
+    def forward(ctx, v_grouped, clusters, counts, lengths):
         factors = torch.ones_like(counts, dtype=v_grouped.dtype)
-        V = broadcast(v_grouped, clusters, factors)
-        ctx.save_for_backward(clusters, factors)
+        V = clustered_broadcast(v_grouped, clusters, counts, factors)
+        ctx.save_for_backward(clusters, counts, factors, lengths)
 
         return V
 
     @staticmethod
     def backward(ctx, grad_v):
-        clusters, factors = ctx.saved_tensors
-        grad_v_grouped = aggregate(grad_v, clusters, factors)
+        clusters, counts, factors, lengths = ctx.saved_tensors
+        grad_v_grouped = clustered_aggregate(grad_v, clusters, factors, lengths)
 
-        return grad_v_grouped, None, None
+        return grad_v_grouped, None, None, None
 
 
 class ClusteredAttention(Module):
@@ -65,7 +65,7 @@ class ClusteredAttention(Module):
     Q_c.
 
     We now use to the centroids Q_c to compute the attention using:
-    
+
         V'_c = softmax(Q_c.mm(K.t()), dim=-1).mm(V).
 
     Now the computed values V'_c are "broadcasted" back to the query members
@@ -111,27 +111,27 @@ class ClusteredAttention(Module):
         hashes = compute_hashes(Q.view(N*H*L, E), planes).view(N, H, L)
 
         # Cluster the hashes and return the cluster index per query
-        groups =  cluster(
+        clusters, counts =  cluster(
             hashes,
             query_lengths._lengths.int(),
             clusters=self.clusters,
             iterations=self.iterations,
             bits=self.bits
         )
-        return groups
+        sorted_clusters, sorted_indx = torch.sort(clusters, dim=-1)
+        return (sorted_clusters, counts), sorted_indx
 
-    def _group_queries(self, Q, groups):
+    def _group_queries(self, Q, groups, lengths):
         """Aggregate the Qs based on the index of cluster they belong to. Make
         sure to allow for gradient propagation backwards from the grouped
         queries to each query."""
-        q_grouped = _GroupQueries.apply(Q, *groups)
+        q_grouped = _GroupQueries.apply(Q, *groups, lengths)
         return q_grouped
 
-    def _broadcast_values(self, V, groups):
+    def _broadcast_values(self, V, groups, lengths):
         """Broadcast the values back to the correct positions but make sure
         that the gradient flows properly."""
-        V_new = _BroadcastValues.apply(V.contiguous(), *groups)
-        V_new = V_new.permute(0, 2, 1, 3).contiguous()
+        V_new = _BroadcastValues.apply(V.contiguous(), *groups, lengths)
         return V_new
 
     def forward(self, queries, keys, values, attn_mask, query_lengths,
@@ -145,11 +145,21 @@ class ClusteredAttention(Module):
         values = values.permute(0,2,1,3).contiguous()
 
         N, H, L, E = queries.shape
+        _, _, S, D = values.shape
         softmax_temp = self.softmax_temp or 1./sqrt(E)
-        
+
         # Cluster the queries into groups
-        groups = self._create_query_groups(queries, query_lengths)
-        Q_grouped = self._group_queries(queries, groups)
+        groups, sorted_indx = self._create_query_groups(queries, query_lengths)
+        # Re-organize queries so that first group belong to first cluster
+        # next to second cluster and so on. This improves kernel implementations.
+        # Note that this step is introduced after NeurIPS submission and
+        # now the complexity is O(N log(N)).
+        q_offset = torch.arange(N*H, device=queries.device).unsqueeze(-1) * L
+        q_flat = (sorted_indx.view(N*H, -1) + q_offset).reshape(-1)
+        s_queries = queries.reshape(-1, E).index_select(0, q_flat).view(N,H,L,E)
+
+        # Aggregate the re-arranged queries.
+        Q_grouped = self._group_queries(s_queries, groups, query_lengths._lengths.int())
         # Compute the attention
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, keys)
         QK = QK + key_lengths.additive_matrix[:, None, None, :]
@@ -157,7 +167,16 @@ class ClusteredAttention(Module):
         V = torch.einsum("nhls,nhsd->nhld", A, values)
 
         # Broadcast grouped attention
-        return self._broadcast_values(V, groups)
+        V_broadcast = self._broadcast_values(V, groups, query_lengths._lengths.int())
+
+        # Reverse the previous mapping
+        rev_indx = torch.argsort(sorted_indx, dim=-1)
+        q_rev_flat = (rev_indx.view(N*H, -1) + q_offset).reshape(-1)
+        V_new = V_broadcast.reshape(-1, D).index_select(0, q_rev_flat).view(N,H,L,D)
+        V_new = V_new.permute(0, 2, 1, 3).contiguous()
+        return V_new
+
+
 
 
 # Register the attention implementation so that it becomes available in our
@@ -167,7 +186,7 @@ AttentionRegistry.register(
     [
         ("clusters", Int),
         ("iterations", Optional(Int, 10)),
-        ("bits", Optional(Int, 32)),
+        ("bits", Optional(Int, 63)),
         ("hash_bias", Optional(Bool, True)),
         ("softmax_temp", Optional(Float)),
         ("attention_dropout", Optional(Float, 0.1)),

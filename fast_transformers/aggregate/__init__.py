@@ -12,8 +12,9 @@ from .aggregate_cpu import aggregate as aggregate_cpu, \
 try:
     from .aggregate_cuda import aggregate as aggregate_gpu, \
         broadcast as broadcast_gpu
-    from .clustered_broadcast_cuda import \
-        clustered_broadcast as clustered_broadcast_gpu
+    from .clustered_aggregate_cuda import \
+        clustered_broadcast as clustered_broadcast_gpu, \
+        clustered_aggregate as clustered_aggregate_gpu
 
 except ImportError:
     pass
@@ -53,9 +54,19 @@ def broadcast(Y, G, F, X=None):
         broadcast_gpu(Y, G, F, X)
 
     return X
-    
 
-def clustered_broadcast(Y, groups, counts, lengths, X=None):
+
+# Divide the cluster into groups of equal size
+# as constrained by the shared memory
+def set_group(C, E):
+    C_per_block = int(192 * 64 / (E+1))
+    G_min = (C + C_per_block - 1) // C_per_block
+    for G in range(G_min, C+1):
+        if C % G == 0:
+            return G
+
+
+def clustered_broadcast(Y, groups, counts, factors, X=None):
     device = Y.device
     if X is None:
         X = torch.zeros(
@@ -63,34 +74,55 @@ def clustered_broadcast(Y, groups, counts, lengths, X=None):
             device=device,
             dtype=Y.dtype
         )
-
     if device.type == "cpu":
-        raise NotImplementedError
+        broadcast_cpu(Y, groups, factors, X)
     else:
         N, H, C, E = Y.shape
-        _, _, L, E = X.shape
-   
-        queries_per_block = min(L, 1024) 
-        threads = queries_per_block
-        blocks = (L//threads) + C + 1
-        query_map = torch.ones((N, H, blocks),
-                               dtype=torch.int32,
-                               device=Y.device) * L 
-        blocks_map = torch.ones_like(query_map,
-                                     dtype=torch.int32,
-                                     device=Y.device) * -1 
-        _, sorted_group_indices = torch.sort(groups, descending=True, dim=-1)
-        factors = torch.ones_like(counts, dtype=Y.dtype)
+        _, _, L, _ = X.shape
+
+        # Following are some booking keeping parameters to facilitate the
+        # broadcast kernel that takes advantage of clustering
+        # More information can be found in the cuda file
+        with torch.no_grad():
+            threads = 256
+            G = set_group(C, E)
+            group_counts = counts.view(N, H, G, -1).sum(-1)
+            block_counts = (group_counts + threads - 1) // threads
+            total_blocks = block_counts.sum().item()
+            indx_maps = torch.ones(
+                (total_blocks, 5),
+                device=X.device,
+                dtype=torch.int32
+            )
+
         clustered_broadcast_gpu(
             Y,
             groups,
             factors,
             X,
-            lengths,
-            blocks_map,
-            query_map,
-            counts,
-            sorted_group_indices,
+            block_counts.int(),
+            group_counts.int(),
+            threads,
+            G,
+            total_blocks,
+            indx_maps
         )
-
     return X
+
+
+def clustered_aggregate(X, G, F, lengths, Y=None):
+    device = X.device
+    if Y is None:
+        Y = torch.zeros(
+            F.shape + (X.shape[-1],),
+            device=device,
+            dtype=X.dtype
+        )
+    else:
+        Y.zero_()
+
+    if device.type == "cpu":
+        aggregate_cpu(X, G, F, Y)
+    else:
+        clustered_aggregate_gpu(X, G, F, lengths, Y)
+    return Y

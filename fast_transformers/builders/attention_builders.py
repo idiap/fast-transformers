@@ -50,7 +50,7 @@ class BaseAttentionBuilder(BaseBuilder):
 
     def __repr__(self):
         return (
-            "{}.from_kwargs(\n".format(self.__class__.__name__) + 
+            "{}.from_kwargs(\n".format(self.__class__.__name__) +
             "\n".join(["    {}={!r},".format(k, v)
                        for k, v in self._parameters.items()])[:-1] +
             "\n)"
@@ -90,7 +90,7 @@ class BaseAttentionBuilder(BaseBuilder):
             raise ValueError(("Invalid attention_type argument "
                               "{!r}").format(attention_type))
         return attentions[0]
-        
+
     def _construct_attention(self, attention_type, decorated=[]):
         """Construct an attention implementation object.
 

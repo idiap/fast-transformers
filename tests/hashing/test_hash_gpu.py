@@ -23,6 +23,7 @@ def simple_lsh(X, A):
     bits = 2**torch.arange(A.shape[0])
     return torch.einsum("ni,i->n", [B, bits]).cuda()
 
+
 class TestHashGPU(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

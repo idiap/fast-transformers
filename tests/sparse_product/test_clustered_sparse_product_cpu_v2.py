@@ -56,7 +56,7 @@ def sparse_product(Q, K, groups, topk, counts, lengths, k, Q_grouped_orig):
     topk = topk.contiguous()
 
     products_sorted = clustered_sparse_dot_product(
-        s_queries, K, topk, groups, counts, lengths
+        s_queries, K, topk, sorted_g.view(N, H, L), counts, lengths
     )
     q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
     products = products_sorted.reshape(-1, k).index_select(0, q_rev_flat)
@@ -68,12 +68,7 @@ def sparse_product(Q, K, groups, topk, counts, lengths, k, Q_grouped_orig):
 class TestSparseProductCUDA(unittest.TestCase):
     @property
     def device(self):
-        return "cuda"
-
-    @classmethod
-    def setUpClass(cls):
-        if not torch.cuda.is_available():
-            raise unittest.SkipTest("No CUDA capable device detected")
+        return "cpu"
 
     def test_simple_product(self):
         N = 2
@@ -89,11 +84,17 @@ class TestSparseProductCUDA(unittest.TestCase):
         for i in range(20):
             k = np.random.randint(10, S)
             E = np.random.randint(10, 129)
+            k = 32
+            E = 32
+            if os.getenv("VERBOSE_TESTS", ""):
+                print(("Testing: N H L S E C k: "
+                       "{} {} {} {} {} {} {}").format(N, H, L, S, E, C, k))
+
             Q = torch.randn(N, H, L, E).to(self.device)
             K = torch.randn(N, H, S, E).to(self.device)
             lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
             lengths[1] = 50
-            lengths[1] = 15
+            lengths[1] = 45
             lengths[1] = 10
             groups, counts = cluster_queries(Q, lengths, C, I, B)
             Q_grouped = aggregate(Q, groups, 1/counts.float())
@@ -143,9 +144,8 @@ class TestSparseProductCUDA(unittest.TestCase):
             k = np.random.randint(10, 64)
 
             if os.getenv("VERBOSE_TESTS", ""):
-                print("Testing: N H L S E C k: {} {} {} {} {} {} {}".format(
-                    N, H, L, S, E, C, k
-                ))
+                print(("Testing: N H L S E C k: "
+                       "{} {} {} {} {} {} {}").format(N, H, L, S, E, C, k))
             Q = torch.randn(N, H, L, E).to(self.device)
             K = torch.randn(N, H, S, E).to(self.device)
             lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
@@ -180,80 +180,6 @@ class TestSparseProductCUDA(unittest.TestCase):
                 ),
                 1e-4
             )
-
-    @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
-    def test_small_benchmark(self):
-        N = 12
-        H = 8
-        L = 1024
-        E = 64
-        S = 1024
-        k = 32
-        C = 100
-        I = 10
-        B = 32
-
-        Q = torch.randn(N, H, L, E).to(self.device)
-        K = torch.randn(N, H, S, E).to(self.device)
-        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
-        groups, counts = cluster_queries(Q, lengths, C, I, B)
-
-        sorted_g, sorted_gi = torch.sort(groups.view(N*H, -1), dim=-1)
-        sorted_rev_gi = torch.argsort(sorted_gi, dim=-1)
-
-        q_offset = torch.arange(N*H, device=Q.device).unsqueeze(-1) * L
-        q_flat = (sorted_gi + q_offset).reshape(-1)
-
-        # sorted queries, keys, values
-        s_queries = Q.reshape(-1, E).index_select(0, q_flat).view(N, H, L, E)
-        Q_grouped = aggregate(
-            s_queries, sorted_g.view(N, H, L), 1/counts.float()
-        )
-        QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
-        _, topk = torch.topk(QK, k, dim=-1)
-        topk = topk.contiguous()
-
-        products_sorted = clustered_sparse_dot_product(
-            s_queries,
-            K,
-            topk,
-            groups,
-            counts,
-            lengths
-        )
-        q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
-        products = products_sorted.reshape(-1, k).index_select(0, q_rev_flat)
-        products = products.view(N, H, L, k)
-
-        for i in range(1000):
-            products_sorted = clustered_sparse_dot_product(
-                s_queries,
-                K,
-                topk,
-                groups,
-                counts,
-                lengths
-            )
-
-        torch.cuda.synchronize()
-        s = torch.cuda.Event(enable_timing=True)
-        e = torch.cuda.Event(enable_timing=True)
-        s.record()
-        products_sorted = clustered_sparse_dot_product(
-            s_queries,
-            K,
-            topk,
-            groups,
-            counts,
-            lengths
-        )
-        e.record()
-        torch.cuda.synchronize()
-        t_sc = s.elapsed_time(e)
-
-        products_sorted = products_sorted.reshape(-1, k).index_select(0, q_rev_flat).view(N, H, L, k)
-        topk = topk.contiguous()
-        print("Sparse_Clustered: {}".format(t_sc))
 
 
 if __name__ == "__main__":

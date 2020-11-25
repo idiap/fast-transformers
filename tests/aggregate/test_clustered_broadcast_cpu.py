@@ -57,23 +57,18 @@ def try_sorted_broadcast(Q, K, V, groups, counts, lengths, Q_grouped_orig):
     QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
     A = F.softmax(QK, dim=-1)
     V_new = torch.einsum("nhls,nhse->nhle", A, V)
-    V_broadcast = torch.zeros((N, H, L, E), dtype=V_new.dtype).cuda()
-    factors = torch.ones_like(counts, dtype=torch.float32)
+    V_broadcast = torch.zeros((N, H, L, E), dtype=V_new.dtype).cpu()
+    factors = torch.ones_like(counts, dtype=torch.float)
     V_sorted_broadcast = clustered_broadcast(
         V_new, sorted_g.view(N, H, L), counts, factors, V_broadcast
     )
-
     q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
     V_broadcast_remap = V_sorted_broadcast.reshape(-1, D).index_select(
         0, q_rev_flat).view(N, H, L, D)
     return V_broadcast_remap
 
 
-class TestClusteredBroadcastGPU(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if not torch.cuda.is_available():
-            raise unittest.SkipTest("No CUDA capable device detected")
+class TestClusteredBroadcastCPU(unittest.TestCase):
 
     def test_broadcast_full(self):
         N = 3
@@ -86,16 +81,16 @@ class TestClusteredBroadcastGPU(unittest.TestCase):
         B = 16
 
         for exp in range(50):
-            Q = torch.randn(N, H, L, E).cuda()
-            lengths = torch.full((N,), L, dtype=torch.int32).cuda()
+            Q = torch.randn(N, H, L, E).cpu()
+            lengths = torch.full((N,), L, dtype=torch.int32).cpu()
             lengths[0] = np.random.randint(C, L+1)
             lengths[1] = np.random.randint(C, L+1)
             groups, counts = cluster_queries(Q, lengths, C, I, B)
             Q_grouped = aggregate(Q, groups, 1/counts.float())
-            K = torch.randn(N, H, S, E).cuda()
+            K = torch.randn(N, H, S, E).cpu()
             QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
 
-            V = torch.randn(N, H, S, E).cuda()
+            V = torch.randn(N, H, S, E).cpu()
             A = F.softmax(QK, dim=-1)
             V_new = torch.einsum("nhls,nhse->nhle", A, V)
             V_broadcast_2 = broadcast(
@@ -131,18 +126,18 @@ class TestClusteredBroadcastGPU(unittest.TestCase):
             lengths = torch.tensor(
                 np.random.randint(C, L+1, N),
                 dtype=torch.int32
-            ).cuda()
+            ).cpu()
             if os.getenv("VERBOSE_TESTS", ""):
                 print(("Test: N H L S E C: "
                        "{} {} {} {} {} {}").format(N, H, L, S, E, C))
 
-            Q = torch.randn(N, H, L, E).cuda()
+            Q = torch.randn(N, H, L, E).cpu()
             groups, counts = cluster_queries(Q, lengths, C, I, B)
             Q_grouped = aggregate(Q, groups, 1/counts.float())
-            K = torch.randn(N, H, S, E).cuda()
+            K = torch.randn(N, H, S, E).cpu()
             QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
 
-            V = torch.randn(N, H, S, E).cuda()
+            V = torch.randn(N, H, S, E).cpu()
             A = F.softmax(QK, dim=-1)
             V_new = torch.einsum("nhls,nhse->nhle", A, V)
             V_broadcast_2 = broadcast(
@@ -162,89 +157,6 @@ class TestClusteredBroadcastGPU(unittest.TestCase):
                 ),
                 1e-4
             )
-
-    @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
-    def test_broadcast_benchmark(self):
-        N = 12
-        H = 8
-        L = 1000
-        S = 1000
-        E = 64
-        D = 64
-        C = 200
-        I = 5
-        B = 63
-
-        Q = torch.randn(N, H, L, E).cuda()
-        lengths = torch.full((N,), L, dtype=torch.int32).cuda()
-        groups, counts = cluster_queries(Q, lengths, C, I, B)
-        sorted_g, sorted_gi = torch.sort(groups.view(N*H, -1), dim=-1)
-        sorted_rev_gi = torch.argsort(sorted_gi, dim=-1)
-
-        q_offset = torch.arange(N*H, device=Q.device).unsqueeze(-1) * L
-        q_flat = (sorted_gi + q_offset).reshape(-1)
-
-        Q_grouped = aggregate(Q, groups, 1/counts.float())
-        K = torch.randn(N, H, S, E).cuda()
-        QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
-
-        V = torch.randn(N, H, S, E).cuda()
-        A = F.softmax(QK, dim=-1)
-        V_new = torch.einsum("nhls,nhse->nhle", A, V)
-        V_broadcast = torch.zeros((N, H, L, E), dtype=V_new.dtype).cuda()
-        factors = torch.ones_like(counts, dtype=torch.float32)
-        V_sorted_broadcast = clustered_broadcast(
-            V_new, sorted_g.view(N, H, L), counts, factors, V_broadcast
-        )
-        q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
-        V_broadcast = V_sorted_broadcast.reshape(-1, D).index_select(
-                0, q_rev_flat).view(N, H, L, D)
-
-        for i in range(2000):
-            factors = torch.ones_like(counts, dtype=torch.float32)
-            V_sorted_broadcast = clustered_broadcast(
-                V_new, sorted_g.view(N, H, L), counts, factors, V_broadcast
-            )
-            q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
-            V_broadcast = V_sorted_broadcast.reshape(-1, D).index_select(
-                    0, q_rev_flat).view(N, H, L, D)
-
-        s = torch.cuda.Event(enable_timing=True)
-        e = torch.cuda.Event(enable_timing=True)
-        s.record()
-        factors = torch.ones_like(counts, dtype=torch.float32)
-        V_sorted_broadcast = clustered_broadcast(
-            V_new, sorted_g.view(N, H, L), counts, factors, V_broadcast
-        )
-        q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
-        V_broadcast = V_sorted_broadcast.reshape(-1, D).index_select(
-                0, q_rev_flat).view(N, H, L, D)
-        e.record()
-        torch.cuda.synchronize()
-        t_broadcast = s.elapsed_time(e)
-
-        for i in range(200):
-            V_broadcast_2 = broadcast(
-                V_new,
-                groups,
-                torch.ones_like(counts, dtype=torch.float32),
-                torch.zeros((N, H, L, E), device=Q.device)
-            )
-
-        s = torch.cuda.Event(enable_timing=True)
-        e = torch.cuda.Event(enable_timing=True)
-        s.record()
-        V_broadcast_2 = broadcast(
-            V_new,
-            groups,
-            torch.ones_like(counts, dtype=torch.float32),
-            torch.zeros((N, H, L, E), device=Q.device)
-        )
-        e.record()
-        torch.cuda.synchronize()
-        t_broadcast_2 = s.elapsed_time(e)
-
-        print("B1: {}, B2: {}".format(t_broadcast, t_broadcast_2))
 
 
 if __name__ == "__main__":

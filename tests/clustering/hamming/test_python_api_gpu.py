@@ -45,6 +45,7 @@ def get_hamming_distances(data, closest_clusters, n_buckets):
 
 
 def labels_to_centroids(labels, centroids):
+    labels[labels == (centroids.shape[-1] + 1)] = -1
     res = [list(map(c.__getitem__, l)) for c,l in zip(centroids,labels)]
     return np.asarray(res)
 
@@ -72,7 +73,8 @@ class TestClusteringGPU(unittest.TestCase):
         n_iterations=10
     
         for n_buckets in range(1, 10):
-            print('Testing convergence for {} bits'.format(n_buckets))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print('Testing convergence for {} bits'.format(n_buckets))
             k = 2**n_buckets
 
             L=k
@@ -140,7 +142,7 @@ class TestClusteringGPU(unittest.TestCase):
         
         k=20
         n_buckets=31
-        n_iterations=10
+        n_iterations=20
 
         n_points = L * N * H
 
@@ -175,12 +177,11 @@ class TestClusteringGPU(unittest.TestCase):
         N=50
         H=4 
         E=32 
-        
-        n_iterations=10
-
+        n_iterations=30
     
         for n_buckets in range(1, 10):
-            print('Testing convergence for {} bits'.format(n_buckets))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print('Testing convergence for {} bits'.format(n_buckets))
             k = 2**n_buckets
             L = k + 1
             n_points = L * N * H

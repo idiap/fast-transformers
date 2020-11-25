@@ -37,7 +37,7 @@ __global__ void aggregate_kernel(
 
     // Copy-aggregate from x into y
     int k = g[n][h][l];
-    if (k < 0) {
+    if ((k < 0) || (k >= C)) {
         return;
     }
     float factor = f[n][h][k];
@@ -101,7 +101,7 @@ __global__ void broadcast_kernel(
 
     // Copy-broadcast from y into x
     int k = g[n][h][l];
-    if (k < 0) {
+    if ((k < 0) || (k >= C)) {
         return;
     }
 

@@ -64,12 +64,7 @@ def sparse_product(Q, K, groups, topk, counts, lengths):
 class TestSparseProductBackward(unittest.TestCase):
     @property
     def device(self):
-        return "cuda"
-
-    @classmethod
-    def setUpClass(cls):
-        if not torch.cuda.is_available():
-            raise unittest.SkipTest("No CUDA capable device detected")
+        return "cpu"
 
     def _zero_grad(self, Q, K):
         for x in [Q, K]:
@@ -94,7 +89,7 @@ class TestSparseProductBackward(unittest.TestCase):
             S = np.random.randint(100, 1000)
             k = np.random.randint(10, 64)
 
-            if os.getenv("VEROSE_TESTS", ""):
+            if os.getenv("VERBOSE_TESTS", ""):
                 print(("Testing Masked: N H L S E C k: "
                        "{} {} {} {} {} {} {}").format(N, H, L, S, E, C, k))
 
@@ -265,87 +260,6 @@ class TestSparseProductBackward(unittest.TestCase):
                     1e-3
                 )
                 i += 1
-
-    @unittest.skipUnless(os.getenv("BENCHMARK_TESTS", ""), "no benchmarks")
-    def test_benchmark_backward(self):
-        N = 12
-        H = 8
-        L = 1024
-        S = 1024
-        E = 64
-        k = 32
-        C = 100
-        I = 10
-        B = 32
-
-        Q = torch.randn(N, H, L, E).to(self.device).requires_grad_(True)
-        K = torch.randn(N, H, S, E).to(self.device).requires_grad_(True)
-        lengths = torch.full((N,), L, dtype=torch.int32).to(self.device)
-
-        self._zero_grad(Q, K)
-        for i in range(100):
-            QK = torch.einsum("nhle,nhse->nhls", Q, K)
-        self._zero_grad(Q, K)
-
-        s = torch.cuda.Event(enable_timing=True)
-        e = torch.cuda.Event(enable_timing=True)
-        QK = torch.einsum("nhle,nhse->nhls", Q, K)
-        s.record()
-        QK.sum().backward()
-        e.record()
-        torch.cuda.synchronize()
-        t_full = s.elapsed_time(e)
-
-        self._zero_grad(Q, K)
-        groups, counts = cluster_queries(Q, lengths, C, I, B)
-        sorted_g, sorted_gi = torch.sort(groups.view(N*H, -1), dim=-1)
-        sorted_rev_gi = torch.argsort(sorted_gi, dim=-1)
-
-        q_offset = torch.arange(N*H, device=Q.device).unsqueeze(-1) * L
-        q_flat = (sorted_gi + q_offset).reshape(-1)
-
-        s_queries = Q.reshape(-1, E).index_select(0, q_flat).view(N, H, L, E)
-
-        Q_grouped = aggregate(Q, groups, 1/counts.float())
-        QK = torch.einsum("nhle,nhse->nhls", Q_grouped, K)
-        _, topk = torch.topk(QK, k, dim=-1)
-        topk = topk.contiguous()
-        products_sorted = clustered_sparse_dot_product(
-            s_queries,
-            K,
-            topk,
-            groups,
-            counts,
-            lengths
-        )
-        q_rev_flat = (sorted_rev_gi + q_offset).reshape(-1)
-        products = products_sorted.reshape(-1, k).index_select(
-            0, q_rev_flat).view(N, H, L, k)
-
-        for i in range(100):
-            QK = clustered_sparse_dot_product(
-                s_queries, K, topk,
-                groups, counts,
-                lengths
-            )
-            QK = QK.reshape(-1, k).index_select(0, q_rev_flat).view(N, H, L, k)
-        self._zero_grad(Q, K)
-
-        s = torch.cuda.Event(enable_timing=True)
-        e = torch.cuda.Event(enable_timing=True)
-        QK = clustered_sparse_dot_product(
-            Q, K, topk,
-            groups, counts,
-            lengths
-        )
-        QK = QK.reshape(-1, k).index_select(0, q_rev_flat).view(N, H, L, k)
-        s.record()
-        QK.sum().backward()
-        e.record()
-        torch.cuda.synchronize()
-        t_sparse = s.elapsed_time(e)
-        print("Benchmark Backward: T_Full: {}, T_Sparse: {}".format(
-            t_full, t_sparse))
 
 
 if __name__ == "__main__":
