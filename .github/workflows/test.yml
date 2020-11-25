@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8]
-        pytorch-version: [1.3.1, 1.5.0, 1.6.0]
+        pytorch-version: [1.3.1, 1.5.0, 1.6.0, 1.7.0]
         exclude:
           - python-version: 3.8
             pytorch-version: 1.3.1
@@ -26,7 +26,7 @@ jobs:
           wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda/miniconda.sh
           bash miniconda/miniconda.sh -b -u -p $(pwd)/miniconda
           rm miniconda/miniconda.sh
-      - run: echo "::add-path::$(pwd)/miniconda/bin:$PATH"
+      - run: echo "$(pwd)/miniconda/bin" >> $GITHUB_PATH
       - run: conda install -y python=${{ matrix.python-version }}
       - run: conda install -y -c pytorch pytorch=${{ matrix.pytorch-version }}
       - run: conda install -y -c conda-forge cudatoolkit-dev
