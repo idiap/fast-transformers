@@ -36,7 +36,10 @@ class TestAggregateGPU(unittest.TestCase):
             C = np.random.randint(5, 10)
             L = np.random.randint(1, 30) * C
             E = np.random.randint(10, 128)
-            print("Testing: N H L E C: {} {} {} {} {}".format(N, H, L, E, C))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print(("Testing: N H L E C: "
+                       "{} {} {} {} {}").format(N, H, L, E, C))
+
             x = torch.rand((N, H, L, E)).cuda()
             g = (torch.arange(L) % C).view(1, 1, L).repeat(N, H, 1).int().cuda()
             f = torch.ones(N, H, C).cuda() * (C / L)
@@ -74,8 +77,9 @@ class TestAggregateGPU(unittest.TestCase):
             C = np.random.randint(5, 10)
             L = np.random.randint(2, 30) * C
             E = np.random.randint(10, 128)
-
-            print("Testing: N H L E C: {} {} {} {} {}".format(N, H, L, E, C))
+            if os.getenv("VERBOSE_TESTS", ""):
+                print(("Testing: N H L E C: "
+                       "{} {} {} {} {}").format(N, H, L, E, C))
             x = torch.rand((N, H, L, E)).cuda()
             g = (torch.arange(L) % C).view(1, 1, L).repeat(N, H, 1).int().cuda()
             g[:, :, -C:] = C + 1

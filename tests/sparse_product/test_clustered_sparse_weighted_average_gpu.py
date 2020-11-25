@@ -171,8 +171,8 @@ class TestSparseWeightedAverage(unittest.TestCase):
         I = 10
         B = 32
         for exp in range(30):
-            N = np.random.randint(1, 6)
-            H = np.random.randint(1, 8)
+            N = np.random.randint(1, 3)
+            H = np.random.randint(1, 4)
             C = np.random.randint(10, 500)
             L = np.random.randint(C, 2000)
             E = np.random.randint(10, 128)
@@ -257,7 +257,7 @@ class TestSparseWeightedAverage(unittest.TestCase):
                 )
 
     def test_forward(self):
-        N = 12
+        N = 6
         H = 5
         L = 100
         S = 100

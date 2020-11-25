@@ -177,9 +177,7 @@ class TestClusteringGPU(unittest.TestCase):
         N=50
         H=4 
         E=32 
-        
         n_iterations=10
-
     
         for n_buckets in range(1, 10):
             if os.getenv("VERBOSE_TESTS", ""):
