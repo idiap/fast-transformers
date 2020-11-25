@@ -3,7 +3,6 @@
 # Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
 # Apoorv Vyas <avyas@idiap.ch>
 #
-# Updated by: Apoorv Vyas (20/l1/2020)
 
 import os
 from os import getenv

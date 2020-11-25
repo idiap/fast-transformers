@@ -3,7 +3,6 @@
 // Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
 // Written by Apoorv Vyas <avyas@idiap.ch>
 //
-// Updated by Apoorv Vyas: 19/11/2020
 
 #include <torch/extension.h>
 
