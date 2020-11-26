@@ -44,7 +44,7 @@ class RecurrentCrossLinearAttention(Module):
     def forward(self, query, keys, values, key_lengths, state=None):
         # If this is a new sequence re initialize the feature map
         if state is None:
-            self.feature_map.new_feature_map()
+            self.feature_map.new_feature_map(query.device)
 
         # Compute the feature representation of the query
         Q = self.feature_map.forward_queries(query)

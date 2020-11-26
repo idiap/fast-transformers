@@ -72,12 +72,15 @@ class RandomFourierFeatures(FeatureMap):
         )
 
         # Make a buffer for storing the sampled omega
-        self.register_buffer(
-            "omega",
-            torch.zeros(query_dimensions, self.n_dims//2)
-        )
+        self.query_dimensions = query_dimensions
+        self.omega = None
 
-    def new_feature_map(self):
+    def new_feature_map(self, device):
+        self.omega = torch.zeros(
+            self.query_dimensions,
+            self.n_dims//2,
+            device=device
+        )
         if self.orthogonal:
             orthogonal_random_matrix_(self.omega)
         else:

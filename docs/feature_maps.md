@@ -20,7 +20,7 @@ class FeatureMap(Module):
     def __init__(self, query_dimensions):
         ...
 
-    def new_feature_map(self):
+    def new_feature_map(self, device):
         """Create a new instance of this feature map. In particular, if it is a
         random feature map sample new parameters."""
         ...

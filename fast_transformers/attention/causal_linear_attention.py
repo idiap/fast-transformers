@@ -71,7 +71,7 @@ class CausalLinearAttention(Module):
     def forward(self, queries, keys, values, attn_mask, query_lengths,
                 key_lengths):
         # Apply the feature map to the queries and keys
-        self.feature_map.new_feature_map()
+        self.feature_map.new_feature_map(queries.device)
         Q = self.feature_map.forward_queries(queries)
         K = self.feature_map.forward_keys(keys)
 

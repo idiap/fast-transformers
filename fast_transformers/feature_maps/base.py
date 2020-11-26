@@ -22,7 +22,7 @@ class FeatureMap(Module):
         super().__init__()
         self.query_dims = query_dims
 
-    def new_feature_map(self):
+    def new_feature_map(self, device):
         """Create a new instance of this feature map. In particular, if it is a
         random feature map sample new parameters."""
         raise NotImplementedError()
@@ -61,7 +61,7 @@ class ActivationFunctionFeatureMap(FeatureMap):
         super().__init__(query_dims)
         self.activation_function = activation_function
 
-    def new_feature_map(self):
+    def new_feature_map(self, device):
         return
 
     def forward(self, x):

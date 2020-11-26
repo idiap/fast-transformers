@@ -50,7 +50,7 @@ class RecurrentLinearAttention(Module):
 
         # If this is a new sequence reinitialize the feature map
         if state is None:
-            self.feature_map.new_feature_map()
+            self.feature_map.new_feature_map(query.device)
 
         # Apply the feature map to the query and key
         Q = self.feature_map.forward_queries(query)
