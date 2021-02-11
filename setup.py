@@ -12,6 +12,8 @@ from itertools import dropwhile
 from os import path
 from setuptools import find_packages, setup
 from subprocess import DEVNULL, call
+import sys
+
 
 try:
     import torch
