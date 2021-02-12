@@ -12,6 +12,8 @@ from itertools import dropwhile
 from os import path
 from setuptools import find_packages, setup
 from subprocess import DEVNULL, call
+import sys
+
 
 try:
     import torch
@@ -60,6 +62,16 @@ def collect_metadata():
     return meta
 
 
+@lru_cache()
+def _get_extra_compile_args():
+    base_args = ["-fopenmp", "-ffast-math"]
+
+    if sys.platform == "darwin":
+        return ["-Xpreprocessor"] + base_args
+    else:
+        return base_args
+
+
 def get_extensions():
     extensions = [
         CppExtension(
@@ -67,49 +79,49 @@ def get_extensions():
             sources=[
                 "fast_transformers/hashing/hash_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.aggregate.aggregate_cpu",
             sources=[
                "fast_transformers/aggregate/aggregate_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.clustering.hamming.cluster_cpu",
             sources=[
                "fast_transformers/clustering/hamming/cluster_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.sparse_product.sparse_product_cpu",
             sources=[
                 "fast_transformers/sparse_product/sparse_product_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.sparse_product.clustered_sparse_product_cpu",
             sources=[
                 "fast_transformers/sparse_product/clustered_sparse_product_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.causal_product.causal_product_cpu",
             sources=[
                 "fast_transformers/causal_product/causal_product_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.local_product.local_product_cpu",
             sources=[
                 "fast_transformers/local_product/local_product_cpu.cpp"
             ],
-            extra_compile_args=["-fopenmp", "-ffast-math"]
+            extra_compile_args=_get_extra_compile_args()
         )
     ]
     if cuda_toolkit_available():

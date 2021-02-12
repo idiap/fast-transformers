@@ -92,6 +92,9 @@ For most machines installation should be as simple as:
 
     pip install --user pytorch-fast-transformers
 
+Note: macOS users should ensure they have `llvm` and `libomp` installed.
+Using the [homebrew](https://brew.sh) package manager, this can be accomplished by running `brew install llvm libomp`.
+
 Documentation
 -------------
 
