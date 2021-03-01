@@ -92,6 +92,9 @@ void sparse_dot_product(
     const torch::Tensor topk,
     torch::Tensor product
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(Q.device());
+
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
@@ -165,6 +168,9 @@ void sparse_dot_backward(
     torch::Tensor grad_Q,
     torch::Tensor grad_K
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(Q.device());
+
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
@@ -247,6 +253,9 @@ void sparse_weighted_average(
     const torch::Tensor topk,
     torch::Tensor output
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(weights.device());
+
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);
@@ -335,6 +344,9 @@ void sparse_weighted_average_backward(
     torch::Tensor grad_weights,
     torch::Tensor grad_values
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(weights.device());
+
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);

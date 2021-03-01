@@ -150,6 +150,9 @@ void clustered_sparse_dot_product(
     torch::Tensor indx_maps,
     torch::Tensor product
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(Q.device());
+
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
@@ -280,6 +283,9 @@ void clustered_sparse_dot_backward(
     const int total_blocks,
     torch::Tensor indx_maps
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(Q.device());
+
     int N = Q.size(0);
     int H = Q.size(1);
     int L = Q.size(2);
@@ -393,6 +399,9 @@ void clustered_sparse_weighted_average(
     const int total_blocks,
     torch::Tensor indx_maps
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(weights.device());
+
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);
@@ -520,6 +529,9 @@ void clustered_sparse_weighted_average_backward(
     const int total_blocks,
     torch::Tensor indx_maps
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(weights.device());
+
     int N = weights.size(0);
     int H = weights.size(1);
     int L = weights.size(2);

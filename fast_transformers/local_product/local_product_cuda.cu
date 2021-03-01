@@ -493,6 +493,9 @@ torch::Tensor local_dot_product(
     const torch::Tensor key_lengths,
     int local_context
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(queries.device());
+
     // Extract some shapes
     int N = queries.size(0);
     int H = queries.size(1);
@@ -522,6 +525,9 @@ std::tuple<torch::Tensor, torch::Tensor> local_dot_backward(
     const torch::Tensor grad,
     int local_context
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(queries.device());
+
     // Extract some shapes
     int N = grad.size(0);
     int H = grad.size(1);
@@ -567,6 +573,9 @@ torch::Tensor local_weighted_average(
     const torch::Tensor attention,
     const torch::Tensor values
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(attention.device());
+
     // Extract some shapes
     int N = attention.size(0);
     int H = attention.size(1);
@@ -605,6 +614,9 @@ std::tuple<torch::Tensor, torch::Tensor> local_weighted_average_backward(
     const torch::Tensor values,
     const torch::Tensor grad
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(attention.device());
+
     // Extract some shapes
     int N = attention.size(0);
     int H = attention.size(1);

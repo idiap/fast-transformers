@@ -262,6 +262,9 @@ void kmeans(
     torch::Tensor counts,
     int iterations
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(hash_codes.device());
+
     const int64_accessor_3d hash_codes_acc = hash_codes.packed_accessor32<int64_t, 3, torch::RestrictPtrTraits>();
     const int32_accessor_1d lengths_acc = lengths.packed_accessor32<int32_t, 1, torch::RestrictPtrTraits>();
     int64_accessor_3d centroids_acc = centroids.packed_accessor32<int64_t, 3, torch::RestrictPtrTraits>();

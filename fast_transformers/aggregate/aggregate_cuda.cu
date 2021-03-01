@@ -57,6 +57,9 @@ void aggregate(
     const torch::Tensor F,
     torch::Tensor Y
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(X.device());
+
     int N = X.size(0);
     int H = X.size(1);
     int L = X.size(2);
@@ -122,6 +125,9 @@ void broadcast(
     const torch::Tensor F,
     torch::Tensor X
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(Y.device());
+
     int N = X.size(0);
     int H = X.size(1);
     int L = X.size(2);

@@ -48,7 +48,6 @@ __global__ void causal_dot_product_kernel(
     const int T,
     const int l_offset
 ) {
-
     const int sequence_index = blockIdx.x / blocks_per_sequence;
     int n = sequence_index / H;
     int h = sequence_index % H;
@@ -121,6 +120,9 @@ void causal_dot_product(
     const torch::Tensor values,
     torch::Tensor product
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(queries.device());
+
     int N = queries.size(0);
     int H = queries.size(1);
     int L = queries.size(2);
@@ -192,7 +194,6 @@ __global__ void causal_dot_backward_query_key_kernel(
     const int T,
     const int l_offset
 ) {
-
     const int sequence_index = blockIdx.x / blocks_per_sequence;
     int n = sequence_index / H;
     int h = sequence_index % H;
@@ -312,7 +313,6 @@ __global__ void causal_dot_backward_value_kernel(
     int T,
     int l_offset
 ) {
-
     const int sequence_index = blockIdx.x / blocks_per_sequence;
     int n = sequence_index / H;
     int h = sequence_index % H;
@@ -394,6 +394,9 @@ void causal_dot_backward(
     torch::Tensor grad_keys,
     torch::Tensor grad_values
 ) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(queries.device());
+
     int N = queries.size(0);
     int H = queries.size(1);
     int L = queries.size(2);

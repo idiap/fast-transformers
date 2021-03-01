@@ -94,6 +94,9 @@ __global__ void hash_kernel(
  * The positive side of the plane gets a 1 the negative a 0.
  */
 void compute_hashes(torch::Tensor X, torch::Tensor A, torch::Tensor H) {
+    // Make sure that we are using the correct GPU device
+    torch::DeviceGuard _guard(X.device());
+
     int N = X.size(0);
     int B = A.size(0);
     int D = X.size(1);
