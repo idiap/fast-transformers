@@ -50,7 +50,7 @@ class ExactTopKAttention(Module):
 
         # Compute the unnormalized attention and apply the masks
         QK = torch.einsum("nlhe,nshe->nhls", queries, keys)
-        topk = min(self.topk, L)
+        topk = min(self.topk, S)
         
         if not attn_mask.all_ones:
             QK = QK + attn_mask.additive_matrix

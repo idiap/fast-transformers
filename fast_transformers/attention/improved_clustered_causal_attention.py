@@ -122,7 +122,7 @@ class ImprovedClusteredCausalAttention(Module):
         # Cluster the hashes and return the cluster index per query
         clusters, counts =  cluster(
             hashes,
-            query_lengths._lengths.int(),
+            query_lengths.lengths.int(),
             clusters=self.clusters,
             iterations=self.iterations,
             bits=self.bits
@@ -146,7 +146,7 @@ class ImprovedClusteredCausalAttention(Module):
         QK = clustered_sparse_dot_product(
             Q, K, topk,
             clusters, counts,
-            query_lengths._lengths.int()
+            query_lengths.lengths.int()
         )
         # We need to mask out the future
         assert topk.is_contiguous()
@@ -211,12 +211,12 @@ class ImprovedClusteredCausalAttention(Module):
         s_queries = queries.reshape(-1, E).index_select(0, q_flat).view(N,H,L,E)
 
         # Aggregate the re-arranged queries.
-        Q_grouped = _GroupQueries.apply(s_queries, *groups, query_lengths._lengths.int())
+        Q_grouped = _GroupQueries.apply(s_queries, *groups, query_lengths.lengths.int())
         # Compute the attention
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, keys)
         QK = QK + key_lengths.additive_matrix[:, None, None, :]
         # Set topk to minimum of key lengths if it is smaller than self.topk
-        cur_topk = min(self.topk, min(key_lengths._lengths).item())
+        cur_topk = min(self.topk, min(key_lengths.lengths).item())
         topk_values, topk = torch.topk(QK, cur_topk, sorted=False, dim=-1)
         assert topk.is_contiguous()
 

@@ -217,11 +217,11 @@ class ImprovedClusteredAttention(Module):
         s_queries = queries.reshape(-1, E).index_select(0, q_flat).view(N,H,L,E)
 
         # Aggregate the re-arranged queries.
-        Q_grouped = _GroupQueries.apply(s_queries, *groups, query_lengths._lengths.int())
+        Q_grouped = _GroupQueries.apply(s_queries, *groups, query_lengths.lengths.int())
         # Compute the attention
         QK = torch.einsum("nhle,nhse->nhls", Q_grouped, keys)
         QK = QK + key_lengths.additive_matrix[:, None, None, :]
-        topk_values, topk = torch.topk(QK, self.topk, sorted=False, dim=-1)
+        topk_values, topk = torch.topk(QK, min(self.topk, S), sorted=False, dim=-1)
         assert topk.is_contiguous()
 
         # Now compute the attention with only the bottom keys
