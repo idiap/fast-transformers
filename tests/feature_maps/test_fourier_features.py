@@ -99,6 +99,37 @@ class TestFourierFeatures(unittest.TestCase):
         y = att(y, y, y, attn_mask, lengths, lengths)
         y.sum().backward()
 
+    def test_feature_map_redraw(self):
+        x = torch.rand(3, 100, 32)
+        f = Favor(32, n_dims=64)
+
+        f.new_feature_map("cpu")
+        fx1 = f(x)
+        f.new_feature_map("cpu")
+        fx2 = f(x)
+        self.assertFalse(torch.allclose(fx1, fx2))
+
+        f = Favor(32, n_dims=64, redraw=2)
+        f.new_feature_map("cpu")
+        fx1 = f(x)
+        f.new_feature_map("cpu")
+        fx2 = f(x)
+        f.new_feature_map("cpu")
+        fx3 = f(x)
+        self.assertTrue(torch.allclose(fx1, fx2))
+        self.assertFalse(torch.allclose(fx2, fx3))
+
+        f = Favor(32, n_dims=64, redraw=1, deterministic_eval=True)
+        f.new_feature_map("cpu")
+        fx1 = f(x)
+        f.new_feature_map("cpu")
+        fx2 = f(x)
+        f.eval()
+        f.new_feature_map("cpu")
+        fx3 = f(x)
+        self.assertFalse(torch.allclose(fx1, fx2))
+        self.assertTrue(torch.allclose(fx2, fx3))
+
 
 if __name__ == "__main__":
     unittest.main()

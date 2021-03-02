@@ -59,32 +59,52 @@ class RandomFourierFeatures(FeatureMap):
         orthogonal: bool, When True the random matrix is initialized for
                     orthogonal random features to reduce the approximation
                     variance (default: False)
+        redraw: int, Redraw the random matrix every 'redraw' times
+                (default: 1)
+        deterministic_eval: bool, Only redraw the random matrix during training
+                            (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
-                 orthogonal=False):
+                 orthogonal=False, redraw=1, deterministic_eval=False):
         super(RandomFourierFeatures, self).__init__(query_dimensions)
 
         self.n_dims = n_dims or query_dimensions
+        self.query_dimensions = query_dimensions
         self.orthogonal = orthogonal
         self.softmax_temp = (
             1/sqrt(query_dimensions) if softmax_temp is None
             else softmax_temp
         )
+        self.redraw = redraw
+        self.deterministic_eval = deterministic_eval
 
         # Make a buffer for storing the sampled omega
-        self.query_dimensions = query_dimensions
-        self.omega = None
+        self.register_buffer(
+            "omega",
+            torch.zeros(self.query_dimensions, self.n_dims//2)
+        )
+        self._calls = -1
 
     def new_feature_map(self, device):
-        self.omega = torch.zeros(
+        # If we are not training skip the generation of a new feature map
+        if self.deterministic_eval and not self.training:
+            return
+
+        # Only redraw the new feature map every self.redraw times
+        self._calls += 1
+        if (self._calls % self.redraw) != 0:
+            return
+
+        omega = torch.zeros(
             self.query_dimensions,
             self.n_dims//2,
             device=device
         )
         if self.orthogonal:
-            orthogonal_random_matrix_(self.omega)
+            orthogonal_random_matrix_(omega)
         else:
-            self.omega.normal_()
+            omega.normal_()
+        self.register_buffer("omega", omega)
 
     def forward(self, x):
         x = x * sqrt(self.softmax_temp)
@@ -113,14 +133,21 @@ class SmoothedRandomFourierFeatures(RandomFourierFeatures):
                     orthogonal random features to reduce the approximation
                     variance (default: False)
         smoothing: float, The smoothing parameter to add to the dot product.
+        redraw: int, Redraw the random matrix every 'redraw' times
+                (default: 1)
+        deterministic_eval: bool, Only redraw the random matrix during training
+                            (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
-                 orthogonal=False, smoothing=1.0):
+                 orthogonal=False, smoothing=1.0, redraw=1,
+                 deterministic_eval=False):
         super(SmoothedRandomFourierFeatures, self).__init__(
             query_dimensions,
             n_dims=query_dimensions-1 if n_dims is None else n_dims-1,
             softmax_temp=softmax_temp,
             orthogonal=orthogonal,
+            redraw=redraw,
+            deterministic_eval=deterministic_eval
         )
         self.smoothing = smoothing
 
@@ -157,12 +184,18 @@ class Favor(RandomFourierFeatures):
                    is equivalent to a robust implementation of softmax where
                    the max is subtracted before the exponentiation.
                    (default: False)
+        redraw: int, Redraw the random matrix every 'redraw' times
+                (default: 1)
+        deterministic_eval: bool, Only redraw the random matrix during training
+                            (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=None,
-                 orthogonal=True, stabilize=False):
+                 orthogonal=True, stabilize=False, redraw=1,
+                 deterministic_eval=False):
         super(Favor, self).__init__(query_dimensions, n_dims=n_dims,
                                     softmax_temp=softmax_temp,
-                                    orthogonal=orthogonal)
+                                    orthogonal=orthogonal, redraw=redraw,
+                                    deterministic_eval=deterministic_eval)
         self.stabilize = stabilize
 
     def _check_sequence_length(self, x):
@@ -229,14 +262,21 @@ class GeneralizedRandomFeatures(RandomFourierFeatures):
                     (default: True)
         kernel_fn: callable, defines the f used for the feature map.
                    (default: relu)
+        redraw: int, Redraw the random matrix every 'redraw' times
+                (default: 1)
+        deterministic_eval: bool, Only redraw the random matrix during training
+                            (default: False)
     """
     def __init__(self, query_dimensions, n_dims=None, softmax_temp=1.0,
-                 orthogonal=True, kernel_fn=torch.relu):
+                 orthogonal=True, kernel_fn=torch.relu, redraw=1,
+                 deterministic_eval=False):
         super(GeneralizedRandomFeatures, self).__init__(
             query_dimensions,
             n_dims=2*query_dimensions if n_dims is None else 2*n_dims,
             softmax_temp=softmax_temp,
-            orthogonal=orthogonal
+            orthogonal=orthogonal,
+            redraw=redraw,
+            deterministic_eval=deterministic_eval
         )
         self.kernel_fn = kernel_fn
 
