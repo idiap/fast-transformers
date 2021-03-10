@@ -61,14 +61,19 @@ class FullAttention(Module):
         _, S, _, D = values.shape
         softmax_temp = self.softmax_temp or 1./sqrt(E)
 
+        # Scale the queries instead of applying the softmax temperature to the
+        # dot products
+        queries = queries * softmax_temp
+
         # Compute the unnormalized attention and apply the masks
         QK = torch.einsum("nlhe,nshe->nhls", queries, keys)
         if not attn_mask.all_ones:
             QK = QK + attn_mask.additive_matrix
-        QK = QK + key_lengths.additive_matrix[:, None, None]
+        if not key_lengths.all_ones:
+            QK = QK + key_lengths.additive_matrix[:, None, None]
 
         # Compute the attention and the weighted average
-        A = self.dropout(torch.softmax(softmax_temp * QK, dim=-1))
+        A = self.dropout(torch.softmax(QK, dim=-1))
         V = torch.einsum("nhls,nshd->nlhd", A, values)
 
         # Let the world know of the attention matrix
