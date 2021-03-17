@@ -14,7 +14,7 @@ from torch.nn import Dropout, Module
 
 from ....attention_registry import RecurrentAttentionRegistry, Optional, \
     Float, EventDispatcherInstance
-from ....events import EventDispatcher
+from ....events import EventDispatcher, AttentionEvent
 from ..._utils import check_state
 
 
@@ -63,6 +63,9 @@ class RecurrentFullAttention(Module):
         # Compute the attention and the weighted average
         A = self.dropout(torch.softmax(softmax_temp * QK, dim=-1))
         V = torch.einsum("nhs,nhsd->nhd", A, values).contiguous()
+
+        # Let the world know of the attention matrix
+        self.event_dispatcher.dispatch(AttentionEvent(self, A))
 
         # Make sure that what we return is contiguous
         return V, [keys, values]
