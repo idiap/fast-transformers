@@ -674,7 +674,7 @@ int lmha_(const Lmha_params<float> &params) {
 
   // The number of threads in the block.
   int block = round_up(max(E, M*THREADS_PER_HEAD), 32);
-  if( block > 1024 || params.B > 65535 ) {
+  if( block > 512 || params.B > 65535 ) {
     return 1;
   }
 
