@@ -49,7 +49,7 @@ class TransformerEncoderLayer(Module):
         self.norm1 = LayerNorm(d_model)
         self.norm2 = LayerNorm(d_model)
         self.dropout = Dropout(dropout)
-        self.activation = F.relu if activation == "relu" else F.gelu
+        self.activation = getattr(F, activation)
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, attn_mask=None, length_mask=None):
@@ -180,7 +180,7 @@ class TransformerDecoderLayer(Module):
         self.norm2 = LayerNorm(d_model)
         self.norm3 = LayerNorm(d_model)
         self.dropout = Dropout(dropout)
-        self.activation = F.relu if activation == "relu" else F.gelu
+        self.activation = getattr(F, activation)
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def forward(self, x, memory, x_mask=None, x_length_mask=None,
