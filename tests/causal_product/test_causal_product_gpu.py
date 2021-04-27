@@ -84,32 +84,37 @@ class TestCausalProductCUDA(unittest.TestCase):
             self.assertLess(max_relative_error(V.grad, gv), 1e-5)
 
     def _test_benchmark_forward(self, CP):
-        N = 10
-        L = 1000
-        H = 10
-        E = 32
-        M = 64
-        Q = torch.rand(N, H, L, E).cuda()
-        K = torch.rand(N, H, L, E).cuda()
-        V = torch.rand(N, H, L, M).cuda()
-        out = torch.rand(N, H, L, M).cuda()
+        print("{:>4} {:>5} {:>5} {:>5} {:>5} {:>8}".format("N", "L", "H", "E", "M", "Time (ms)"))
+        for N, L, H, E, M in [
+            [8, 4096, 8, 512, 512],
+            [1, 4096, 8, 512, 512],
+            [16, 512, 8, 512, 512],
+            [16, 128, 8, 512, 512],
+            [1, 128, 8, 512, 512],
+            [16, 4096, 1, 512, 512],
+            [16, 4096, 8, 64, 64],
+        ]:
+            Q = torch.rand(N, H, L, E).cuda()
+            K = torch.rand(N, H, L, E).cuda()
+            V = torch.rand(N, H, L, M).cuda()
+            out = torch.rand(N, H, L, M).cuda()
 
-        # warmup the cache
-        for i in range(10):
-            self.kernels[CP]["forward"](Q, K, V, out)
+            # warmup the cache
+            for i in range(10):
+                self.kernels[CP]["forward"](Q, K, V, out)
 
-        # measure
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-        start.record()
-        for i in range(10):
-            self.kernels[CP]["forward"](Q, K, V, out)
-        end.record()
-        torch.cuda.synchronize()
-        print("[{}] GPU time taken: {} (ms)".format(
-            CP,
-            start.elapsed_time(end)
-        ))
+            # measure
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+            for i in range(10):
+                self.kernels[CP]["forward"](Q, K, V, out)
+            end.record()
+            torch.cuda.synchronize()
+            print("{:>5} {:>5} {:>5} {:>5} {:>5} {:>8.1f}".format(
+                N, L, H, E, M,
+                start.elapsed_time(end)
+            ))
 
     def _test_benchmark_backward(self, CP):
         N = 10

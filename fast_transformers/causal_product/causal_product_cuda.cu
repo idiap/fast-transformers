@@ -31,7 +31,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#define ENABLE_NVIDIA_OPTIMIZATIONS
+// #define ENABLE_NVIDIA_OPTIMIZATIONS
 
 #ifdef ENABLE_NVIDIA_OPTIMIZATIONS
 namespace nvidia {
@@ -1222,6 +1222,7 @@ __device__ void get_result(
     }
 }
 
+#define E_BLOCK_SIZE 4
 
 __global__ void causal_dot_product_kernel(
     const float_accessor queries,
@@ -1234,75 +1235,32 @@ __global__ void causal_dot_product_kernel(
     const int L,
     const int E,
     const int M,
-    const int E_per_block,
-    const int blocks_per_sequence,
-    const int T,
-    const int l_offset
+    const int T
 ) {
-    const int sequence_index = blockIdx.x / blocks_per_sequence;
-    int n = sequence_index / H;
-    int h = sequence_index % H;
+    int n = blockIdx.y;
+    int h = blockIdx.z;
 
-    int e_local = threadIdx.x / M;
-    int e_start = ((blockIdx.x % blocks_per_sequence) * E_per_block);
-    int e = e_start + e_local;
+    int e_start = blockIdx.x * E_BLOCK_SIZE;
     int m = threadIdx.x % M;
 
-    // Load the shared memory for KV
-    const int shared_kv_size = E_per_block * M;
     extern __shared__ float shared_mem[];
     float* shared_kv = shared_mem;
-    float* shared_results = shared_mem + shared_kv_size;
-    float* shared_values = shared_results + M;
-    float* shared_keys = shared_values + M*T;
-    float* shared_queries = shared_keys + E_per_block*T;
 
-    if (threadIdx.x < M) {
-        shared_results[threadIdx.x] = 0.0;
+    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
+      shared_kv[m + e_local * M] = kv[n][h][e_local + e_start][m];
+    for (int t=0; t<T; t++) {
+      float res = 0;
+      for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++) {
+        shared_kv[e_local*M + m] += keys[n][h][t][e_local + e_start] * values[n][h][t][m];
+        res += queries[n][h][t][e_local + e_start] * shared_kv[e_local*M + m];
+      }
+      atomicAdd(
+          &result[n][h][t][m],
+          res
+      );
     }
-
-    int t_end = (T + l_offset) <= L ? T : L - l_offset;
-    for (int i = threadIdx.x; i < (t_end*M); i += blockDim.x)
-    {
-        int t = int(i / M) + l_offset;
-        int d = i % M;
-        shared_values[i] = values[n][h][t][d];
-    }
-    for (int i = threadIdx.x; i < (t_end*E_per_block); i += blockDim.x)
-    {
-        int t = int(i / E_per_block) + l_offset;
-        int d = (i % E_per_block) + e_start;
-        if (d < E) {
-            shared_keys[i] = keys[n][h][t][d];
-            shared_queries[i] = queries[n][h][t][d];
-        }
-    }
-    __syncthreads();
-    if ((n >= N) || (e >= E)) {
-        return;
-    }
-    shared_kv[threadIdx.x] = kv[n][h][e][m];
-    for (int t=0; t<t_end; t++) {
-        int l = t + l_offset;
-        shared_kv[e_local*M + m] += shared_keys[t*E_per_block + e_local] * shared_values[t*M + m];
-        __syncthreads();
-        float res = shared_queries[t*E_per_block + e_local] * shared_kv[e_local*M + m];
-        atomicAdd(
-            &shared_results[m],
-            res
-        );
-        __syncthreads();
-        if (threadIdx.x < M) {
-            float r1 = shared_results[threadIdx.x];
-            atomicAdd(
-                &result[n][h][l][m],
-                r1
-            );
-            shared_results[threadIdx.x] = 0.0;
-        }
-    }
-    __syncthreads();
-    kv[n][h][e][m] = shared_kv[e_local*M + m];
+    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
+      kv[n][h][e_local + e_start][m] = shared_kv[m + e_local * M];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1322,33 +1280,20 @@ void causal_dot_product_(const torch::Tensor queries,
 
     auto kv = torch::zeros({N, H, E, M}, queries.options());
 
-    int threads = 1024;
+    const int blocks_per_sequence = (E + E_BLOCK_SIZE - 1) / E_BLOCK_SIZE;
 
-    // Shared mem max size is 48KB
-    int MUL_PER_BLOCK = min(threads, E*M);
-    // make sure that MUL_PER_BLOCK is divisible by M;
-    MUL_PER_BLOCK = int(MUL_PER_BLOCK / M) *  M;
-    threads = MUL_PER_BLOCK;
-    const int blocks_per_sequence = ((E*M) + threads -1) / threads;
+    dim3 blockDim(M, 1, 1);
+    dim3 gridDim(blocks_per_sequence, N, H);
+    const int shared_mem_forward = E_BLOCK_SIZE * M * sizeof(float);
 
-    const int E_per_block = MUL_PER_BLOCK / M;
-    int blocks  = N*H*blocks_per_sequence;
-    int shared_mem_const = (E_per_block + 1)*M;
-    int shared_mem_per_time = (M + 2*E_per_block);
-    const int T = int(((12 * 1024) - shared_mem_const) / shared_mem_per_time);
-    const int shared_mem_forward = ((T*shared_mem_per_time) + shared_mem_const) * sizeof(float);
-
-    for (int l_offset=0; l_offset < L; l_offset += T) {
-     causal_dot_product_kernel
-            <<<blocks, MUL_PER_BLOCK, shared_mem_forward>>>(
-            queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            product.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-            N, H, L, E, M, E_per_block, blocks_per_sequence, T, l_offset
-        );
-    }
+    causal_dot_product_kernel<<<gridDim, blockDim, shared_mem_forward>>>(
+      queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+      keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+      values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+      kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+      product.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
+      N, H, L, E, M, L
+    );
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
