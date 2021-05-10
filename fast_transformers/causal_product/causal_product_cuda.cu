@@ -31,7 +31,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-// #define ENABLE_NVIDIA_OPTIMIZATIONS
+#define ENABLE_NVIDIA_OPTIMIZATIONS
 
 #ifdef ENABLE_NVIDIA_OPTIMIZATIONS
 namespace nvidia {
