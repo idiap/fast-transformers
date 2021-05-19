@@ -1199,29 +1199,6 @@ int lmha_bwd(const torch::Tensor queries,
 
 typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor;
 
-__device__ void get_result(
-    const float_accessor queries,
-    const float_accessor keys,
-    const float_accessor values,
-    float_accessor kv,
-    float_accessor result,
-    const int n,
-    const int h,
-    const int e,
-    const int m,
-    const int L
-) {
-    for (int l=0; l<L; l++) {
-        kv[n][h][e][m] += keys[n][h][l][e] * values[n][h][l][m];
-        __syncthreads();
-        float res = queries[n][h][l][e]*kv[n][h][e][m];
-        atomicAdd(
-            &result[n][h][l][m],
-            res
-        );
-    }
-}
-
 #define E_BLOCK_SIZE 4
 
 __global__ void causal_dot_product_kernel(
@@ -1492,6 +1469,14 @@ void causal_dot_backward(const torch::Tensor queries,
   int fallback = 1;
 #endif
   if( fallback ) {
+    // Make sure that the gradient tensors are 0. This is needed because the
+    // bwd pass might have partially executed and filled in some values in
+    // grad_queries or grad_keys.
+    //
+    // This adds a small overhead every time we have to fall back to the old
+    // kernel for the backward pass.
+    grad_queries.zero_();
+    grad_keys.zero_();
     causal_dot_backward_(queries, keys, values, grad_out, grad_queries, grad_keys, grad_values);
   }
 }

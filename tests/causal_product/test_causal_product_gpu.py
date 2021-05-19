@@ -40,12 +40,12 @@ class TestCausalProductCUDA(unittest.TestCase):
             raise unittest.SkipTest("No CUDA available")
 
     def _test_result_forward(self, CP):
-        for t in range(10):
+        for t in range(20):
             N = 10
             L = 100
             H = 10
-            E = np.random.randint(10, 256)
-            M = np.random.randint(10, 256)
+            E = np.random.randint(10, 512)
+            M = np.random.randint(10, 512)
             Q = torch.rand(N, H, L, E).cuda()
             K = torch.rand(N, H, L, E).cuda()
             V = torch.rand(N, H, L, M).cuda()
@@ -59,12 +59,12 @@ class TestCausalProductCUDA(unittest.TestCase):
             self.assertLess(max_relative_error(out2, out), 1e-5)
 
     def _test_result_backward(self, CP):
-        for t in range(10):
+        for t in range(20):
             N = 10
             L = 100
             H = 10
-            E = np.random.randint(10, 256)
-            M = np.random.randint(10, 256)
+            E = np.random.randint(10, 512)
+            M = np.random.randint(10, 512)
             Q = torch.rand(N, H, L, E).cuda()
             K = torch.rand(N, H, L, E).cuda()
             V = torch.rand(N, H, L, M).cuda()
