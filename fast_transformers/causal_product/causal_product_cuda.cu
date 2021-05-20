@@ -1199,13 +1199,12 @@ int lmha_bwd(const torch::Tensor queries,
 
 typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float_accessor;
 
-#define E_BLOCK_SIZE 4
+#define E_BLOCK_SIZE 8
 
 __global__ void causal_dot_product_kernel(
     const float_accessor queries,
     const float_accessor keys,
     const float_accessor values,
-    float_accessor kv,
     float_accessor result,
     const int N,
     const int H,
@@ -1222,8 +1221,10 @@ __global__ void causal_dot_product_kernel(
     extern __shared__ float shared_mem[];
     float* shared_kv = shared_mem;
 
-    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
-      shared_kv[m + e_local * M] = kv[n][h][e_local + e_start][m];
+    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++) {
+      shared_kv[m + e_local * M] = 0;
+    }
+
     for (int t=0; t<L; t++) {
       float res = 0;
       for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++) {
@@ -1235,8 +1236,6 @@ __global__ void causal_dot_product_kernel(
           res
       );
     }
-    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
-      kv[n][h][e_local + e_start][m] = shared_kv[m + e_local * M];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1254,8 +1253,6 @@ void causal_dot_product_(const torch::Tensor queries,
     int E = queries.size(3);
     int M = values.size(3);
 
-    auto kv = torch::zeros({N, H, E, M}, queries.options());
-
     const int blocks_per_sequence = (E + E_BLOCK_SIZE - 1) / E_BLOCK_SIZE;
 
     dim3 blockDim(M, 1, 1);
@@ -1266,7 +1263,6 @@ void causal_dot_product_(const torch::Tensor queries,
       queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-      kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       product.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       N, H, L, E, M
     );
@@ -1302,7 +1298,6 @@ __global__ void causal_dot_backward_query_key_kernel(
     const float_accessor keys,
     const float_accessor values,
     const float_accessor grad_out,
-    float_accessor kv,
     float_accessor grad_queries,
     float_accessor grad_keys,
     int N,
@@ -1323,7 +1318,7 @@ __global__ void causal_dot_backward_query_key_kernel(
     float* shared_kv_bw = shared_mem + shared_kv_size;
 
     for (int m_local = 0; m_local < M_BLOCK_SIZE && m_local + m_start < M; m_local++) {
-      shared_kv[m_local * E + e] = kv[n][h][e][m_local + m_start];
+      shared_kv[m_local * E + e] = 0;
       shared_kv_bw[m_local * E + e] = 0;
     }
 
@@ -1345,9 +1340,6 @@ __global__ void causal_dot_backward_query_key_kernel(
         res_bw
       );
     }
-    for (int m_local = 0; m_local < M_BLOCK_SIZE && m_local + m_start < M; m_local++) {
-      kv[n][h][e][m_local + m_start] = shared_kv[m_local * E + e];
-    }
 }
 
 
@@ -1356,7 +1348,6 @@ __global__ void causal_dot_backward_value_kernel(
     const float_accessor keys,
     const float_accessor values,
     const float_accessor grad_out,
-    float_accessor kv,
     float_accessor grad_keys,
     float_accessor grad_values,
     int N,
@@ -1373,8 +1364,9 @@ __global__ void causal_dot_backward_value_kernel(
 
     extern __shared__ float shared_mem[];
     float* shared_kv = shared_mem;
-    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
-      shared_kv[m + e_local * M] = kv[n][h][e_local + e_start][m];
+    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++) {
+      shared_kv[m + e_local * M] = 0;
+    }
 
     for (int l = 0; l < L; l++) {
         int l_b = L - l -1;
@@ -1388,8 +1380,6 @@ __global__ void causal_dot_backward_value_kernel(
             res
         );
     }
-    for (int e_local = 0; e_local < E_BLOCK_SIZE && e_local + e_start < E; e_local++)
-      kv[n][h][e_local + e_start][m] = shared_kv[m + e_local * M];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1411,8 +1401,6 @@ void causal_dot_backward_(const torch::Tensor queries,
     int E = queries.size(3);
     int M = values.size(3);
 
-    auto kv = torch::zeros({N, H, E, M}, queries.options());
-
     const int blocks_per_sequence = (M + M_BLOCK_SIZE - 1) / M_BLOCK_SIZE;
 
     dim3 blockDim(E, 1, 1);
@@ -1424,7 +1412,6 @@ void causal_dot_backward_(const torch::Tensor queries,
       keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-      kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       N, H, L, E, M
@@ -1435,13 +1422,11 @@ void causal_dot_backward_(const torch::Tensor queries,
     dim3 blockDimv(M, 1, 1);
     dim3 gridDimv(blocks_per_sequence_value, N, H);
     const int shared_mem_v_backward = E_BLOCK_SIZE * M * sizeof(float);
-    kv.zero_();
     causal_dot_backward_value_kernel<<<gridDimv, blockDimv, shared_mem_v_backward>>>(
       queries.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_out.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
-      kv.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_keys.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       grad_values.packed_accessor32<float, 4, torch::RestrictPtrTraits>(),
       N, H, L, E, M
