@@ -9,6 +9,7 @@
 
 from functools import lru_cache
 from itertools import dropwhile
+import os
 from os import path
 from setuptools import find_packages, setup
 from subprocess import DEVNULL, call
@@ -199,9 +200,10 @@ def setup_package():
     with open("README.rst") as f:
         long_description = f.read()
     meta = collect_metadata()
+    version_suffix = os.getenv("FAST_TRANSFORMERS_VERSION_SUFFIX", "")
     setup(
         name="pytorch-fast-transformers",
-        version=meta["version"],
+        version=meta["version"] + version_suffix,
         description=meta["description"],
         long_description=long_description,
         long_description_content_type="text/x-rst",

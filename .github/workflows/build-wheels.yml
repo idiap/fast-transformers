@@ -1,0 +1,58 @@
+# Build wheels for easier installation
+name: build-wheels
+
+on:
+  push:
+    tags: ['v*']
+    branches: [build-wheels]
+
+# Build a wheel
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.6, 3.7, 3.8]
+        pytorch-version: [1.7, 1.8, 1.9]
+        cuda-version: [10.2, 11.1]
+        exclude:
+            - pytorch-version: 1.7
+              cuda-version: 11.1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: echo "FAST_TRANSFORMERS_VERSION_SUFFIX=+pytorch${{ matrix.pytorch-version }}+cu${{ matrix.cuda-version }}" >> $GITHUB_ENV
+      - run: |
+          if [ "${{ matrix.cuda-version }}" == "10.2" ]; then
+            sudo apt install -y gcc-8 g++-8
+            echo "CC=gcc-8" >> $GITHUB_ENV
+            echo "CXX=g++-8" >> $GITHUB_ENV
+            sudo rm /usr/bin/gcc /usr/bin/g++
+            sudo ln -s /usr/bin/gcc-8 /usr/bin/gcc
+            sudo ln -s /usr/bin/g++-8 /usr/bin/g++
+            wget --quiet https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run
+            sudo sh cuda_10.2.89_440.33.01_linux.run --silent --toolkit
+            echo "/usr/local/cuda-10.2/bin" >> $GITHUB_PATH
+            echo "TORCH_CUDA_ARCH_LIST=6.0;6.1;6.2;7.0;7.2;7.5" >> $GITHUB_ENV
+          elif [ "${{ matrix.cuda-version }}" == "11.1" ]; then
+            wget --quiet https://developer.download.nvidia.com/compute/cuda/11.1.1/local_installers/cuda_11.1.1_455.32.00_linux.run
+            sudo sh cuda_11.1.1_455.32.00_linux.run --silent --toolkit
+            echo "/usr/local/cuda-11.1/bin" >> $GITHUB_PATH
+            echo "TORCH_CUDA_ARCH_LIST=6.0;6.1;6.2;7.0;7.2;7.5;8.0" >> $GITHUB_ENV
+          else
+            exit 1
+          fi
+      - run: |
+          mkdir miniconda
+          wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda/miniconda.sh
+          bash miniconda/miniconda.sh -b -u -p $(pwd)/miniconda
+          rm miniconda/miniconda.sh
+      - run: echo "$(pwd)/miniconda/bin" >> $GITHUB_PATH
+      - run: conda install -y python=${{ matrix.python-version }}
+      - run: conda install -y pytorch=${{ matrix.pytorch-version }} cudatoolkit=${{ matrix.cuda-version }} -c pytorch -c nvidia
+      - run: python setup.py build_ext --inplace
+      - run: python setup.py bdist_wheel
+      - uses: actions/upload-artifact@v2
+        with:
+          name: dist-wheel
+          path: dist/*.whl
