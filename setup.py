@@ -132,56 +132,56 @@ def get_extensions():
                 sources=[
                     "fast_transformers/hashing/hash_cuda.cu",
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.aggregate.aggregate_cuda",
                 sources=[
                     "fast_transformers/aggregate/aggregate_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.aggregate.clustered_aggregate_cuda",
                 sources=[
                     "fast_transformers/aggregate/clustered_aggregate_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.clustering.hamming.cluster_cuda",
                 sources=[
                     "fast_transformers/clustering/hamming/cluster_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.sparse_product.sparse_product_cuda",
                 sources=[
                     "fast_transformers/sparse_product/sparse_product_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.sparse_product.clustered_sparse_product_cuda",
                 sources=[
                     "fast_transformers/sparse_product/clustered_sparse_product_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.causal_product.causal_product_cuda",
                 sources=[
                     "fast_transformers/causal_product/causal_product_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             ),
             CUDAExtension(
                 "fast_transformers.local_product.local_product_cuda",
                 sources=[
                     "fast_transformers/local_product/local_product_cuda.cu"
                 ],
-                extra_compile_args=["-arch=compute_50"]
+                extra_compile_args=[]
             )
         ]
     return extensions

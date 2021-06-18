@@ -18,3 +18,4 @@ from .conditional_full_attention import ConditionalFullAttention
 from .exact_topk_attention import ExactTopKAttention
 from .improved_clustered_causal_attention import ImprovedClusteredCausalAttention
 from .local_attention import LocalAttention
+from .aft_attention import AFTFullAttention, AFTSimpleAttention

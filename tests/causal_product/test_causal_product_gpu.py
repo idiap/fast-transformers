@@ -41,7 +41,7 @@ class TestCausalProductCUDA(unittest.TestCase):
 
     def _test_result_forward(self, CP):
         for t in range(20):
-            N = 10
+            N = 4
             L = 100
             H = 10
             E = np.random.randint(10, 512)
@@ -60,7 +60,7 @@ class TestCausalProductCUDA(unittest.TestCase):
 
     def _test_result_backward(self, CP):
         for t in range(20):
-            N = 10
+            N = 4
             L = 100
             H = 10
             E = np.random.randint(10, 512)

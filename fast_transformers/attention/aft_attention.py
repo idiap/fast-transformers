@@ -9,6 +9,8 @@
 import torch
 from torch.nn import Module
 
+from ..attention_registry import AttentionRegistry, Optional, Int, \
+    EventDispatcherInstance
 from ..events import EventDispatcher
 
 
@@ -131,3 +133,21 @@ class AFTSimpleAttention(Module):
                              "instead.")
 
         return V
+
+
+# Register the attention implementation so that it becomes available in our
+# builders
+AttentionRegistry.register(
+    "aft-full", AFTFullAttention,
+    [
+        ("max_sequence_length", Optional(Int, 1024)),
+        ("aft_parameterization", Optional(Int, 64)),
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
+)
+AttentionRegistry.register(
+    "aft-simple", AFTSimpleAttention,
+    [
+        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
+    ]
+)
