@@ -63,13 +63,21 @@ def collect_metadata():
 
 
 @lru_cache()
-def _get_extra_compile_args():
+def _get_cpu_extra_compile_args():
     base_args = ["-fopenmp", "-ffast-math"]
 
     if sys.platform == "darwin":
         return ["-Xpreprocessor"] + base_args
     else:
         return base_args
+
+
+@lru_cache()
+def _get_gpu_extra_compile_args():
+    if torch.cuda.is_available():
+        return []
+    else:
+        return ["-arch=compute_60"]
 
 
 def get_extensions():
@@ -79,49 +87,49 @@ def get_extensions():
             sources=[
                 "fast_transformers/hashing/hash_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.aggregate.aggregate_cpu",
             sources=[
                "fast_transformers/aggregate/aggregate_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.clustering.hamming.cluster_cpu",
             sources=[
                "fast_transformers/clustering/hamming/cluster_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.sparse_product.sparse_product_cpu",
             sources=[
                 "fast_transformers/sparse_product/sparse_product_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.sparse_product.clustered_sparse_product_cpu",
             sources=[
                 "fast_transformers/sparse_product/clustered_sparse_product_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.causal_product.causal_product_cpu",
             sources=[
                 "fast_transformers/causal_product/causal_product_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         ),
         CppExtension(
             "fast_transformers.local_product.local_product_cpu",
             sources=[
                 "fast_transformers/local_product/local_product_cpu.cpp"
             ],
-            extra_compile_args=_get_extra_compile_args()
+            extra_compile_args=_get_cpu_extra_compile_args()
         )
     ]
     if cuda_toolkit_available():
@@ -132,56 +140,56 @@ def get_extensions():
                 sources=[
                     "fast_transformers/hashing/hash_cuda.cu",
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.aggregate.aggregate_cuda",
                 sources=[
                     "fast_transformers/aggregate/aggregate_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.aggregate.clustered_aggregate_cuda",
                 sources=[
                     "fast_transformers/aggregate/clustered_aggregate_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.clustering.hamming.cluster_cuda",
                 sources=[
                     "fast_transformers/clustering/hamming/cluster_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.sparse_product.sparse_product_cuda",
                 sources=[
                     "fast_transformers/sparse_product/sparse_product_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.sparse_product.clustered_sparse_product_cuda",
                 sources=[
                     "fast_transformers/sparse_product/clustered_sparse_product_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.causal_product.causal_product_cuda",
                 sources=[
                     "fast_transformers/causal_product/causal_product_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             ),
             CUDAExtension(
                 "fast_transformers.local_product.local_product_cuda",
                 sources=[
                     "fast_transformers/local_product/local_product_cuda.cu"
                 ],
-                extra_compile_args=[]
+                extra_compile_args=_get_gpu_extra_compile_args()
             )
         ]
     return extensions
