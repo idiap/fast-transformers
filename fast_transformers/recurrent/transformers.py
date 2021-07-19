@@ -21,7 +21,7 @@ import torch
 from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList
 import torch.nn.functional as F
 
-from ..events import EventDispatcher
+from ..events import EventDispatcher, IntermediateOutput
 from ..masking import LengthMask
 from ._utils import check_state
 
@@ -131,6 +131,7 @@ class RecurrentTransformerEncoder(Module):
         for i, layer in enumerate(self.layers):
             x, s = layer(x, state[i])
             state[i] = s
+            self.event_dispatcher.dispatch(IntermediateOutput(self, x))
 
         # Apply the normalization if needed
         if self.norm is not None:
@@ -270,6 +271,7 @@ class RecurrentTransformerDecoder(Module):
         for i, layer in enumerate(self.layers):
             x, s = layer(x, memory, memory_length_mask=memory_length_mask,
                          state=state[i])
+            self.event_dispatcher.dispatch(IntermediateOutput(self, x))
             state[i] = s
 
         # Apply the normalization if needed

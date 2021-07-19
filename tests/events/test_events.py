@@ -7,7 +7,8 @@ import unittest
 
 import torch
 
-from fast_transformers.events import EventDispatcher, QKVEvent, AttentionEvent
+from fast_transformers.events import EventDispatcher, QKVEvent, \
+    AttentionEvent, IntermediateOutput
 from fast_transformers.events.filters import layer_name_contains
 from fast_transformers.builders import TransformerEncoderBuilder
 
@@ -64,6 +65,17 @@ class TestEvents(unittest.TestCase):
         x = transformer(torch.rand(1, 100, 64*4))
         self.assertEqual(len(A), 4)
 
+    def test_intermediate_output(self):
+        intermediates = []
+        def store_values(event):
+            intermediates.append(event.x)
+
+        transformer = TransformerEncoderBuilder().get()
+        x = transformer(torch.rand(1, 100, 64*4))
+
+        EventDispatcher.get().listen(IntermediateOutput, store_values)
+        transformer(x)
+        self.assertEqual(len(intermediates), 4)
 
 
 if __name__ == "__main__":

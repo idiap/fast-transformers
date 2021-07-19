@@ -49,3 +49,17 @@ class QKVEvent(Event):
         self.queries = queries
         self.keys = keys
         self.values = values
+
+
+class IntermediateOutput(Event):
+    """Used by the TransformerEncoder and the TransformerDecoder to provide the
+    intermediate outputs to interested callers.
+
+    Arguments
+    ---------
+        source: torch.nn.Module instance that dispatched this event
+        x: torch.tensor containing the intermediate features in shape NLD
+    """
+    def __init__(self, source, x):
+        super().__init__(source)
+        self.x = x

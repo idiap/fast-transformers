@@ -14,7 +14,7 @@ import torch
 from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList
 import torch.nn.functional as F
 
-from .events import EventDispatcher
+from .events import EventDispatcher, IntermediateOutput
 from .masking import FullMask, LengthMask
 
 
@@ -136,6 +136,7 @@ class TransformerEncoder(Module):
         # Apply all the transformers
         for layer in self.layers:
             x = layer(x, attn_mask=attn_mask, length_mask=length_mask)
+            self.event_dispatcher.dispatch(IntermediateOutput(self, x))
 
         # Apply the normalization if needed
         if self.norm is not None:
@@ -286,6 +287,7 @@ class TransformerDecoder(Module):
             x = layer(x, memory, x_mask=x_mask, x_length_mask=x_length_mask,
                       memory_mask=memory_mask,
                       memory_length_mask=memory_length_mask)
+            self.event_dispatcher.dispatch(IntermediateOutput(self, x))
 
         # Apply the normalization if needed
         if self.norm is not None:
