@@ -106,6 +106,15 @@ class TestBuilders(unittest.TestCase):
         m = torch.rand(1, 13, 7*32)
         y = transformer(x, m)
 
+        t = TransformerDecoderBuilder.from_kwargs(
+            n_layers=1,
+            n_heads=4,
+            query_dimensions=32,
+            cross_n_heads=7,
+            cross_value_dimensions=32,
+            cross_query_dimensions=32
+        ).get()
+
     def test_recurrent_decoder(self):
         transformer = RecurrentDecoderBuilder().get()
         builder = RecurrentDecoderBuilder()

@@ -357,7 +357,7 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
         return self._cross_d_query or self.query_dimensions
 
     @cross_query_dimensions.setter
-    def cross_attention(self, n):
+    def cross_query_dimensions(self, n):
         self._cross_d_query = n
 
     @property
