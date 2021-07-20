@@ -35,6 +35,7 @@ class BaseTransformerBuilder(BaseBuilder):
         self._d_query = 64
         self._d_value = 64
         self._d_ff = 1024
+        self._d_model = None
         self._dropout = 0.1
         self._activation = "relu"
         self._final_norm = True
@@ -85,6 +86,14 @@ class BaseTransformerBuilder(BaseBuilder):
     @value_dimensions.setter
     def value_dimensions(self, val):
         self._d_value = val
+
+    @property
+    def model_dimensions(self):
+        return self._d_model or self.value_dimensions * self.n_heads
+
+    @model_dimensions.setter
+    def model_dimensions(self, n):
+        self._d_model = n
 
     @property
     def dropout(self):
@@ -217,7 +226,7 @@ class BaseTransformerEncoderBuilder(BaseTransformerBuilder):
         EncoderLayer = self._get_encoder_layer_class()
         Attention = self._get_attention_layer_class()
 
-        model_dimensions = self.value_dimensions*self.n_heads
+        model_dimensions = self.model_dimensions
         return Encoder(
             [
                 EncoderLayer(
@@ -329,6 +338,45 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
         self._self_attention_type = "full"
         self._cross_attention_type = "full"
 
+        self._cross_n_heads = None
+        self._cross_d_query = None
+        self._cross_d_value = None
+        self._cross_d_model = None
+
+    @property
+    def cross_n_heads(self):
+        """Define the number of heads for the cross attention."""
+        return self._cross_n_heads or self.n_heads
+
+    @cross_n_heads.setter
+    def cross_n_heads(self, n):
+        self._cross_n_heads = n
+
+    @property
+    def cross_query_dimensions(self):
+        return self._cross_d_query or self.query_dimensions
+
+    @cross_query_dimensions.setter
+    def cross_attention(self, n):
+        self._cross_d_query = n
+
+    @property
+    def cross_value_dimensions(self):
+        return self._cross_d_value or self.value_dimensions
+
+    @cross_value_dimensions.setter
+    def cross_value_dimensions(self, n):
+        self._cross_d_value = n
+
+    @property
+    def cross_model_dimensions(self):
+        return self._cross_d_model or \
+            self.cross_n_heads * self.cross_value_dimensions
+
+    @cross_model_dimensions.setter
+    def cross_model_dimensions(self, n):
+        self._cross_d_model = n
+
     def _get_self_attention_builder(self):
         """Return an instance of attention builder."""
         raise NotImplementedError()
@@ -423,7 +471,8 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
         SelfAttention = self._get_self_attention_layer_class()
         CrossAttention = self._get_cross_attention_layer_class()
 
-        model_dimensions = self.value_dimensions*self.n_heads
+        model_dimensions = self.model_dimensions
+        cross_model_dimensions = self.cross_model_dimensions
         return Decoder(
             [
                 DecoderLayer(
@@ -437,10 +486,11 @@ class BaseTransformerDecoderBuilder(BaseTransformerBuilder):
                     ),
                     CrossAttention(
                         self.cross_attention.get(self.cross_attention_type),
-                        model_dimensions,
-                        self.n_heads,
-                        d_keys=self.query_dimensions,
-                        d_values=self.value_dimensions,
+                        self.model_dimensions,
+                        self.cross_n_heads,
+                        d_keys=self.cross_query_dimensions,
+                        d_values=self.cross_value_dimensions,
+                        d_model_keys=cross_model_dimensions,
                         event_dispatcher=self.event_dispatcher
                     ),
                     model_dimensions,

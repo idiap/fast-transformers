@@ -40,17 +40,18 @@ class RecurrentCrossAttentionLayer(Module):
                           global dispatcher)
     """
     def __init__(self, attention, d_model, n_heads, d_keys=None,
-                 d_values=None, event_dispatcher=""):
+                 d_values=None, d_model_keys=None, event_dispatcher=""):
         super(RecurrentCrossAttentionLayer, self).__init__()
 
         # Fill d_keys and d_values
         d_keys = d_keys or (d_model//n_heads)
         d_values = d_values or (d_model//n_heads)
+        d_model_keys = d_model_keys or d_model
 
         self.inner_attention = attention
         self.query_projection = Linear(d_model, d_keys * n_heads)
-        self.key_projection = Linear(d_model, d_keys * n_heads)
-        self.value_projection = Linear(d_model, d_values * n_heads)
+        self.key_projection = Linear(d_model_keys, d_keys * n_heads)
+        self.value_projection = Linear(d_model_keys, d_values * n_heads)
         self.out_projection = Linear(d_values * n_heads, d_model)
         self.n_heads = n_heads
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)

@@ -8,6 +8,8 @@
 import argparse
 import unittest
 
+import torch
+
 from fast_transformers.builders import \
     TransformerEncoderBuilder, \
     RecurrentEncoderBuilder, \
@@ -97,6 +99,13 @@ class TestBuilders(unittest.TestCase):
             builder = TransformerDecoderBuilder()
             builder.cross_attention_type = "whatever"
 
+        builder.cross_n_heads = 7
+        builder.cross_value_dimensions = 32
+        transformer = builder.get()
+        x = torch.rand(1, 20, 4*64)
+        m = torch.rand(1, 13, 7*32)
+        y = transformer(x, m)
+
     def test_recurrent_decoder(self):
         transformer = RecurrentDecoderBuilder().get()
         builder = RecurrentDecoderBuilder()
@@ -112,6 +121,14 @@ class TestBuilders(unittest.TestCase):
         with self.assertRaises(ValueError):
             builder = RecurrentDecoderBuilder()
             builder.cross_attention_type = "whatever"
+
+        builder.cross_n_heads = 7
+        builder.cross_value_dimensions = 32
+        transformer = builder.get()
+        x = torch.rand(1, 4*64)
+        m = torch.rand(1, 13, 7*32)
+        y, s = transformer(x, m)
+        y, s = transformer(x, m, state=s)
 
     def test_attention_parameter(self):
         builder = TransformerEncoderBuilder()
