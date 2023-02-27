@@ -12,7 +12,7 @@
 typedef torch::PackedTensorAccessor32<float, 4, torch::RestrictPtrTraits> float4_accessor;
 typedef torch::PackedTensorAccessor32<float, 3, torch::RestrictPtrTraits> float3_accessor;
 typedef torch::PackedTensorAccessor32<float, 2, torch::RestrictPtrTraits> float2_accessor;
-typedef torch::PackedTensorAccessor32<long, 1, torch::RestrictPtrTraits> long_accessor;
+typedef torch::PackedTensorAccessor32<int64_t, 1, torch::RestrictPtrTraits> long_accessor;
 
 
 inline int ceildiv(int a, int b) {
@@ -77,7 +77,7 @@ struct masked_lp_copy
     ) {
         return masked_lp_copy(
             attn_mask.packed_accessor32<float, 2, torch::RestrictPtrTraits>(),
-            key_lengths.packed_accessor32<long, 1, torch::RestrictPtrTraits>(),
+            key_lengths.packed_accessor32<int64_t, 1, torch::RestrictPtrTraits>(),
             n_heads
         );
     }
