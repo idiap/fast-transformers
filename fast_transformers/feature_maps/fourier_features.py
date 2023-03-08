@@ -34,7 +34,7 @@ def orthogonal_random_matrix_(w):
         end = min(start+rows, columns)
         block = torch.randn(rows, rows, device=w.device)
         norms = torch.sqrt(torch.einsum("ab,ab->a", block, block))
-        Q, _ = torch.qr(block)
+        Q, _ = torch.linalg.qr(block)
         w[:, start:end] = (
             Q[:, :end-start] * norms[None, :end-start]
         )
