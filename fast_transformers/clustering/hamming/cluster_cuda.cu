@@ -162,7 +162,7 @@ void bit_count_kernel(
     }
 
     for (int i=0; i<B; i++) {
-        int64_t bit= 1L << i;
+        int64_t bit= 1LL << i;
         if((x & bit) > 0) {
             val_to_add = 1;
         }
@@ -210,7 +210,7 @@ void compute_means_kernel(
     const int k = full_idx % K;
 
     int64_t mean_k = 0;
-    const int64_t MAX = (1L << (B));
+    const int64_t MAX = (1LL << (B));
 
     // if the counts for the current cluster is 0 set mean to random
     if(counts[n][h][k] == 0) {
@@ -222,10 +222,10 @@ void compute_means_kernel(
     for( int i=0; i<B; i++) {
         if(cluster_bit_counts[n][h][k][i] == 0) {
             cluster_bit_counts[n][h][k][i] =
-                (curand(state + k) & 1L);
+                (curand(state + k) & 1LL);
         }
         if(cluster_bit_counts[n][h][k][i] > 0) {
-            mean_k = mean_k | (1L << i);
+            mean_k = mean_k | (1LL << i);
         }
     }
     centroids[n][h][k] = mean_k;

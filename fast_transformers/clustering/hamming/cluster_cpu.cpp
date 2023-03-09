@@ -16,25 +16,9 @@
         return __builtin_popcountll(x);
     }
 #elif _MSC_VER
-    //Code Borrowed from llvm-libc++, MIT license
-    inline int popcnt(int64_t x)
-    {
-      // Binary: 0101...
-      static const unsigned long long m1 = 0x5555555555555555;
-      // Binary: 00110011..
-      static const unsigned long long m2 = 0x3333333333333333;
-      // Binary:  4 zeros,  4 ones ...
-      static const unsigned long long m4 = 0x0f0f0f0f0f0f0f0f;
-      // The sum of 256 to the power of 0,1,2,3...
-      static const unsigned long long h01 = 0x0101010101010101;
-      // Put count of each 2 bits into those 2 bits.
-      x -= (x >> 1) & m1;
-      // Put count of each 4 bits into those 4 bits.
-      x = (x & m2) + ((x >> 2) & m2);
-      // Put count of each 8 bits into those 8 bits.
-      x = (x + (x >> 4)) & m4;
-      // Returns left 8 bits of x + (x<<8) + (x<<16) + (x<<24) + ...
-      return static_cast<int>((x * h01) >> 56);
+    #include <intrin.h>
+    inline int popcnt(int64_t x) {
+        return static_cast<int>(__popcnt64(x));
     }
 #else
     #error "Popcnt not implemented"
@@ -131,7 +115,7 @@ void recompute_centroids(
     auto length_a = lengths.accessor<int32_t, 1>();
     auto centroid_a = centroids.accessor<int64_t, 3>();
 
-    ThreadSafePRNG prng(0, (1UL<<bits)-1UL);  // see the class comment on why
+    ThreadSafePRNG prng(0, (1ULL<<bits)-1ULL);  // see the class comment on why
 
     #pragma omp parallel for
     for (int n=0; n<N; n++) {
@@ -158,7 +142,7 @@ void recompute_centroids(
                     if (cluster_a[n][h][l] == k) {
                         int64_t hash = hash_a[n][h][l];
                         for (int b=0; b<bits; b++) {
-                            if (hash & 1L<<b) {
+                            if (hash & (1LL<<b)) {
                                 counts[b]++;
                             } else {
                                 counts[b]--;
@@ -179,7 +163,7 @@ void recompute_centroids(
                     centroid_a[n][h][k] = c;
                 } else {
                     int64_t c = prng.random();
-                    centroid_a[n][h][k] = c & ((1L<<bits)-1);
+                    centroid_a[n][h][k] = c & ((1LL<<bits)-1LL);
                 }
             }
         }
